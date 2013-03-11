@@ -83,6 +83,10 @@
 #include "jsstrinlines.h"
 #include "jsautooplen.h"        // generated headers last
 
+#ifdef TAINT_ON_
+#include "taint.h"
+#endif
+
 using namespace js;
 using namespace js::gc;
 
@@ -3376,8 +3380,29 @@ String_fromCharCode(JSContext* cx, int32 i)
 JS_DEFINE_TRCINFO_1(str_fromCharCode,
     (2, (static, STRING_RETRY, String_fromCharCode, CONTEXT, INT32, 1, nanojit::ACCSET_NONE)))
 
+#ifdef TAINT_ON_
+
+
+//registering the newTainted javascript method on strings
+//more info available here:
+//https://developer.mozilla.org/en-US/docs/SpiderMonkey/JSAPI_User_Guide#Native_functions
+
+inline JSBool str_newTainted(JSContext *cx, uintN argc, jsval *vp)
+{
+    printf("registered new method\n");
+
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    return JS_TRUE;
+}
+
+#endif
+
 static JSFunctionSpec string_static_methods[] = {
     JS_TN("fromCharCode", str_fromCharCode, 1, 0, &str_fromCharCode_trcinfo),
+#ifdef TAINT_ON_
+    //add javascript taint methods to string static methods
+    ADD_JS_TAINT_METHODS()
+#endif
     JS_FS_END
 };
 

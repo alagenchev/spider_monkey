@@ -1,0 +1,15 @@
+cd js/src
+autoconf-2.13
+
+mkdir build-release
+cd build-release
+../configure
+make
+cd ..
+
+mkdir build-debug
+cd build-debug
+../configure --enable-debug --disable-optimize
+make
+
+CXXFLAGS="-g3 -DTAINT_ON_=1" ../configure --enable-debug --disable-optimize

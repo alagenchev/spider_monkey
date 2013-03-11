@@ -1,0 +1,5 @@
+//this is just a helper script to help me configure the build faster
+//place in build-debug folder and invoke from there
+//more info on building here:https://developer.mozilla.org/en-US/docs/SpiderMonkey/Build_Documentation
+//CXXFLAGS="-g3 -DTAINT_ON_=1" ../configure --enable-debug --disable-optimize
+
