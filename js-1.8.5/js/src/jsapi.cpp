@@ -665,6 +665,12 @@ JSRuntime::init(uint32 maxbytes)
         return false;
 #endif
 
+#ifdef TAINT_ON_
+    if(!InitTaintEntries(this))
+    {
+        return false;
+    }
+#endif
     debugMode = JS_FALSE;
 
     return js_InitThreads(this);
