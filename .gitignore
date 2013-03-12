@@ -1,6 +1,8 @@
+/js-1.8.5/js/src/tags
 /js-1.8.5/js/src/.jsstr.cpp.swp
 *.swp
+*.swo
 /js-1.8.5/js/src/configure
 /js-1.8.5/js/src/build-debug
 /js-1.8.5/js/src/build-release
-
+*.taghl
