@@ -162,7 +162,12 @@ struct JSString
      * EXTENSIBLE.
      */
     static const size_t TYPE_FLAGS_MASK = JS_BITMASK(4);
+
+#ifdef TAINT_ON_
+    static const size_t LENGTH_SHIFT    = 5;
+#else
     static const size_t LENGTH_SHIFT    = 4;
+#endif
 
     static const size_t TYPE_MASK       = JS_BITMASK(2);
     static const size_t FLAT            = 0x0;
@@ -176,6 +181,21 @@ struct JSString
     static const size_t ATOMIZED        = JS_BIT(2);
     static const size_t EXTENSIBLE      = JS_BIT(3);
 
+#ifdef TAINT_ON_
+    static const size_t TAINTED_FLAG = JS_BIT(4);
+
+
+    JS_ALWAYS_INLINE bool isTainted() const
+    {
+        return lengthAndFlags & TAINTED_FLAG;
+    }
+
+    inline void setTainted()
+    {
+        lengthAndFlags | TAINTED_FLAG;
+    }
+
+#endif
 
     size_t buildLengthAndFlags(size_t length, size_t flags) {
         return (length << LENGTH_SHIFT) | flags;
