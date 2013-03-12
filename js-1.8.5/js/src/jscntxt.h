@@ -74,6 +74,10 @@
 #include "jsvector.h"
 #include "prmjtime.h"
 
+#ifdef TAINT_ON_
+#include "taint.h"
+#endif
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable:4100) /* Silence unreferenced formal parameter warnings */
@@ -1091,6 +1095,10 @@ struct JSRuntime {
     volatile ptrdiff_t  gcMallocBytes;
 
   public:
+
+#ifdef TAINT_ON_
+    InfoTaintEntry *rootTaintEntry;
+#endif
     js::GCChunkAllocator    *gcChunkAllocator;
 
     void setCustomGCChunkAllocator(js::GCChunkAllocator *allocator) {
