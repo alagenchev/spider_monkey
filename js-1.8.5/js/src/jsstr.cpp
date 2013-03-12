@@ -3389,10 +3389,7 @@ JS_DEFINE_TRCINFO_1(str_fromCharCode,
 
 inline JSBool str_newTainted(JSContext *cx, uintN argc, jsval *vp)
 {
-    printf("registered new method\n");
-
-    JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    return JS_TRUE;
+    return taint_newTainted(cx, argc, vp);
 }
 
 #endif
@@ -3401,7 +3398,7 @@ static JSFunctionSpec string_static_methods[] = {
     JS_TN("fromCharCode", str_fromCharCode, 1, 0, &str_fromCharCode_trcinfo),
 #ifdef TAINT_ON_
     //add javascript taint methods to string static methods
-    ADD_JS_TAINT_METHODS()
+    HOOK_JS_TAINT_METHODS()
 #endif
     JS_FS_END
 };
