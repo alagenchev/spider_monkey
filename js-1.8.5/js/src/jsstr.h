@@ -192,7 +192,7 @@ struct JSString
 
     inline void setTainted()
     {
-        lengthAndFlags | TAINTED_FLAG;
+        lengthAndFlags |= TAINTED_FLAG;
     }
 
 #endif

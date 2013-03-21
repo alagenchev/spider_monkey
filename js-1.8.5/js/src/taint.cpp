@@ -81,7 +81,7 @@ static JSBool markLiveObjects(JSContext *cx, JSGCStatus theStatus)
     {
         js::GCMarker trc(cx);
 #ifdef DEBUG
-        printf("GCCalled\n");
+       // printf("GCCalled\n");
 #endif
         tmpTaintEntry = cx->runtime->rootTaintEntry;
         prevTaintEntry = cx->runtime->rootTaintEntry;
@@ -177,7 +177,7 @@ static JSBool markLiveObjects(JSContext *cx, JSGCStatus theStatus)
             }
         }
 #ifdef DEBUG
-        printf("GCCalled end\n");
+       // printf("GCCalled end\n");
 #endif
     }
     return GCMI._oldCallback?GCMI._oldCallback(cx,theStatus):JS_TRUE;
@@ -343,6 +343,22 @@ JSBool taint_newTainted(JSContext *cx, uintN argc, jsval *vp)
     //not a string
     return JS_FALSE;
 
+}
+
+
+JSBool taint_getTainted(JSContext *cx, JSString *str, jsval *val)
+{
+    bool isTainted = str->isTainted();
+    if(isTainted)
+    {
+        *val = BOOLEAN_TO_JSVAL(JS_TRUE);
+    }
+    else
+    {
+        *val = BOOLEAN_TO_JSVAL(JS_FALSE);
+    }
+
+    return JS_TRUE;
 }
 
 

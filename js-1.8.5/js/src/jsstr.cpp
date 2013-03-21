@@ -631,6 +631,28 @@ static JSFunctionSpec string_functions[] = {
 jschar      js_empty_ucstr[]  = {0};
 JSSubString js_EmptySubString = {0, js_empty_ucstr};
 
+#ifdef TAINT_ON_
+JSBool str_getTaintedProperty(JSContext *cx, JSObject *obj, jsid id, jsval *vp)
+{
+    JSString *str;
+    str = obj->getPrimitiveThis().toString();
+    JSBool isTainted = taint_getTainted(cx, str, vp);
+    return isTainted;
+}
+
+JSPropertySpec taint_props[]
+{
+    {
+        "tainted", 1, //-1 is the tinyid of this property. it should be a unique 
+            //property id for this object
+            JSPROP_PERMANENT|JSPROP_SHARED, str_getTaintedProperty, 0//0 for no setter
+            //JSPROP_PERMANENT, str_getTaintedProperty, 0//0 for no setter
+    },
+    {0,0,0,0,0}//JS_DefineProperties expects a null element as last element 
+               //to indicate end of array
+};
+#endif
+
 static JSBool
 str_getProperty(JSContext *cx, JSObject *obj, jsid id, Value *vp)
 {
@@ -3411,17 +3433,21 @@ js_InitStringClass(JSContext *cx, JSObject *obj)
     /* Define the escape, unescape functions in the global object. */
     if (!JS_DefineFunctions(cx, obj, string_functions))
         return NULL;
-
     proto = js_InitClass(cx, obj, NULL, &js_StringClass, js_String, 1,
-                         NULL, string_methods,
-                         NULL, string_static_methods);
+            NULL, string_methods,
+            NULL, string_static_methods);
+
+#ifdef TAINT_ON_
+    JS_DefineProperties(cx, proto, taint_props);
+#endif
+
     if (!proto)
         return NULL;
     proto->setPrimitiveThis(StringValue(cx->runtime->emptyString));
     if (!js_DefineNativeProperty(cx, proto, ATOM_TO_JSID(cx->runtime->atomState.lengthAtom),
-                                 UndefinedValue(), NULL, NULL,
-                                 JSPROP_READONLY | JSPROP_PERMANENT | JSPROP_SHARED, 0, 0,
-                                 NULL)) {
+                UndefinedValue(), NULL, NULL,
+                JSPROP_READONLY | JSPROP_PERMANENT | JSPROP_SHARED, 0, 0,
+                NULL)) {
         return JS_FALSE;
     }
 

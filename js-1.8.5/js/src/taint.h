@@ -44,4 +44,5 @@ typedef struct InfoTaintDep
 
 extern JSBool taint_newTainted(JSContext *cx, uintN argc, jsval *vp);
 extern JSBool InitTaintEntries(JSRuntime *rt);
+extern JSBool taint_getTainted(JSContext *cx, JSString *str, jsval *vp);
 #endif
