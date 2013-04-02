@@ -530,6 +530,8 @@ js_AtomizeString(JSContext *cx, JSString *strArg, uintN flags)
                 key = str;
             }
 
+
+
             if (!atoms.relookupOrAdd(p, key, StringToInitialAtomEntry(key))) {
                 JS_ReportOutOfMemory(cx); /* SystemAllocPolicy does not report */
                 return NULL;
@@ -539,6 +541,14 @@ js_AtomizeString(JSContext *cx, JSString *strArg, uintN flags)
     }
 
     AddAtomEntryFlags(*p, flags & (ATOM_PINNED | ATOM_INTERNED));
+
+#ifdef TAINT_ON_
+
+            if(str->isTainted())
+            {
+                key->setTainted();
+            }
+#endif
 
     JSAtom *atom = STRING_TO_ATOM(key);
     return atom;
