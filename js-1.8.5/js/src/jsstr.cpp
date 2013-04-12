@@ -244,6 +244,31 @@ JS_DEFINE_CALLINFO_2(extern, BOOL, js_Flatten, CONTEXT, STRING, 0, nanojit::ACCS
 
 #endif /* !JS_TRACER */
 
+#ifdef TAINT_ON_
+void taint_addConcatStringTaintInfos(JSContext *cx, JSString *left, JSString *right, 
+        JSString *result)
+{
+    int leftLength = left->length();
+    int rightLength = right->length();
+
+    if(left->isTainted() && !right->isTainted())
+    {
+        addTaintInfo(cx, left, result, CONCATLEFT, 0, leftLength);
+    }
+    else if(right->isTainted() && !left->isTainted())
+    {
+        addTaintInfo(cx, right, result, CONCATRIGHT, leftLength, leftLength + rightLength);
+    }
+    else
+    {
+
+        addTaintInfo(cx, left, result, CONCAT, 0, leftLength);
+        addTaintInfo(cx, right, result, CONCAT, leftLength, leftLength + rightLength);
+    }
+}
+
+#endif
+
 JSString * JS_FASTCALL
 js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
 {
@@ -260,10 +285,14 @@ js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
     if (rightLen == 0)
         return left;
 
+
     size_t wholeLength = leftLen + rightLen;
 
-    if (JSShortString::fitsIntoShortString(wholeLength)) {
+    if (JSShortString::fitsIntoShortString(wholeLength)) 
+    {
+
         JSShortString *shortStr = js_NewGCShortString(cx);
+
         if (!shortStr)
             return NULL;
         const jschar *leftChars = left->getChars(cx);
@@ -277,6 +306,22 @@ js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
         js_short_strncpy(buf, leftChars, leftLen);
         js_short_strncpy(buf + leftLen, rightChars, rightLen);
         buf[wholeLength] = 0;
+
+
+#ifdef TAINT_ON_
+
+        if(left->isTainted() || right->isTainted())
+        {
+            JSString* taintedString = taint_newTaintedString(cx, shortStr->header()); 
+
+            taint_addConcatStringTaintInfos(cx, left, right, shortStr->header());
+
+            return taintedString;
+        }
+
+
+        #endif
+
         return shortStr->header();
     }
 
