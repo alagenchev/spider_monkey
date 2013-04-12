@@ -13,25 +13,25 @@
 typedef enum taintop {NONEOP,GET,SET,SOURCE,SINK,CHARAT,SUBSTRING,LOWERCASE,UPPERCASE,JOIN,SPLIT,SLICE,REPLACE,REGEXP,CONCAT,CONCATLEFT,CONCATRIGHT,ESCAPE,UNESCAPE,ENCODEURI,UNENCODEURI,ENCODEURICOMPONENT,UNENCODEURICOMPONENT,TRIM,TAGIFY,QUOTE,DEPEND,ATOB,BTOA} TaintOp;
 
 
-typedef struct InfoTaintEntry
+typedef struct TaintInfoEntry
 {
     JSString *taintedString;
     jsuint refCount;
     TaintOp  op;
     JSString *origin;
-    struct InfoTaintDep *dep;
-    struct InfoTaintEntry *nextEntry;
-} InfoTaintEntry;
+    struct TaintDependencyEntry *taintee;
+    struct TaintInfoEntry *nextEntry;
+} TaintInfoEntry;
 
 
-typedef struct InfoTaintDep
+typedef struct TaintDependencyEntry
 {
-    InfoTaintEntry *entry;
-    int spos;
-    int epos;
-    JSObject *desc;
-    struct InfoTaintDep *next;
-} InfoTaintDep;
+    TaintInfoEntry *tainter;
+    int startPosition;
+    int endPosition;
+    JSObject *description;
+    struct TaintDependencyEntry *myDependencyEntry;
+} TaintDependencyEntry;
 
 #endif
 
@@ -45,4 +45,6 @@ typedef struct InfoTaintDep
 extern JSBool taint_newTainted(JSContext *cx, uintN argc, jsval *vp);
 extern JSBool InitTaintEntries(JSRuntime *rt);
 extern JSBool taint_getTainted(JSContext *cx, JSString *str, jsval *vp);
+extern JSString* taint_newTaintedString(JSContext *cx, JSString *str);
+extern JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, TaintOp op, int start, int end);
 #endif

@@ -1097,7 +1097,7 @@ struct JSRuntime {
   public:
 
 #ifdef TAINT_ON_
-    InfoTaintEntry *rootTaintEntry;
+    TaintInfoEntry *rootTaintEntry;
 #endif
     js::GCChunkAllocator    *gcChunkAllocator;
 

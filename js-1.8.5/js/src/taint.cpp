@@ -24,29 +24,221 @@ static struct GCManagerInfo
     JSGCCallback _oldCallback;
 } GCMI;
 
-JSBool removeInfoTaintEntryDeps( InfoTaintEntry *entryToRemoveFrom)
+TaintInfoEntry *findTaintEntry(JSContext *cx,JSString *stringToFind)
 {
-    InfoTaintDep *currentDep;
-    InfoTaintDep *nextDep;
+    TaintInfoEntry *currentEntry = cx->runtime->rootTaintEntry;
+
+    if(!currentEntry)
+    {
+        return NULL;
+    }
+
+    do
+    {
+        if(currentEntry->taintedString == stringToFind)
+        {
+            return currentEntry;
+        }
+        else
+        {
+            currentEntry = currentEntry->nextEntry;
+        }
+    }while(currentEntry);
+
+    return NULL;
+}
+
+TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
+        TaintOp taintOp)
+{
+    TaintInfoEntry *newTaintEntry;
+    TaintInfoEntry *tempTaintEntry = findTaintEntry(cx, str);
+    
+    if(tempTaintEntry != NULL && tempTaintEntry->op == taintOp)
+    {
+        return tempTaintEntry;
+    }
+
+    //we should have a runtime and the rootTaintEntry
+    //should have been initialized in jsapi.cpp in JSRuntime::init()
+
+    if(!cx->runtime || !cx->runtime->rootTaintEntry)
+    {
+        return NULL;
+    }
+
+    //nothing has been tainted so far, make the new taint
+    //entry be the root entry that has been initialized
+    //when the runtime was initialized
+    if(cx->runtime->rootTaintEntry->taintedString == NULL)
+    {
+        //since this has already been initialized, we don't need
+        //to call alloc again
+
+        newTaintEntry = cx->runtime->rootTaintEntry;
+        newTaintEntry->taintedString = str;
+        newTaintEntry->origin = source;
+        newTaintEntry->op = taintOp;
+        newTaintEntry->taintee = NULL;
+    }
+    else
+    {
+        //this is a whole new entry and we already have at least one entry in the taint list
+        newTaintEntry = (TaintInfoEntry *) JS_malloc(cx, (size_t) sizeof(TaintInfoEntry));
+
+        if(!newTaintEntry)
+        {
+            return NULL;//allocation failed
+        }
+        
+        newTaintEntry->taintedString = str;
+        newTaintEntry->origin=source;
+        newTaintEntry->op=taintOp;
+        newTaintEntry->taintee=NULL;
+        
+        //make the new entry the root and the 
+        //current root the new entry's next entry
+        tempTaintEntry = cx->runtime->rootTaintEntry;
+        newTaintEntry->nextEntry = tempTaintEntry;
+        cx->runtime->rootTaintEntry = newTaintEntry;
+
+    }
+    
+    //no one is referring to this entry yet, 
+    //since it's newly added - set the refCount to 0.
+    newTaintEntry->refCount = 0; 
+    return NULL;
+}
+TaintDependencyEntry *addTaintDependencyEntry(JSContext *cx, TaintInfoEntry *originalEntry, 
+        TaintInfoEntry *newTaintEntry)
+{
+    TaintDependencyEntry *newDependency;
+    newDependency = (TaintDependencyEntry *) JS_malloc(cx, (size_t) sizeof(TaintDependencyEntry));
+
+    if(!newDependency)
+    {
+        return NULL;
+    }
+
+
+    if(newTaintEntry->taintee)
+    {
+        newDependency->myDependencyEntry = newTaintEntry->taintee;
+    }
+    else
+    {
+        newDependency->myDependencyEntry = NULL;
+    }
+
+    if(originalEntry)
+    {
+        newDependency->tainter = originalEntry;
+        originalEntry->refCount++;
+    }
+    else
+    {
+        newDependency->tainter = NULL;
+    }
+
+    return newDependency;
+}
+//this method adds to both the dependency table and the taint table
+TaintDependencyEntry *addDependentEntry(JSContext *cx, JSString *tainter, JSString *taintee, 
+        JSString *source, TaintOp op)
+{
+    TaintInfoEntry *originalEntry = findTaintEntry(cx, tainter);
+
+    if(!originalEntry)
+    {
+        return NULL;
+    }
+
+    
+    TaintInfoEntry *newTaintEntry = addToTaintTable(cx, taintee, source, op);
+
+    if(!newTaintEntry)
+    {
+        return NULL;
+    }
+
+    TaintDependencyEntry *newDependencyEntry  = addTaintDependencyEntry(cx, originalEntry, newTaintEntry);
+
+    if(!newDependencyEntry)
+    {
+        return NULL;
+    }
+
+    newTaintEntry->taintee = newDependencyEntry;
+
+    return newDependencyEntry;
+
+}
+
+JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, TaintOp op, int start, int end)
+{
+    //source of taint is set as NULL here. I wonder if we can be a 
+    //bit more precise
+    TaintDependencyEntry *newDependencyEntry = addDependentEntry(cx, tainter, taintee, NULL, op);
+
+    if(!newDependencyEntry)
+    {
+        return JS_FALSE;
+    }
+
+    newDependencyEntry->startPosition = start;
+    newDependencyEntry->endPosition = end;
+    newDependencyEntry->description = NULL;
+
+
+    return JS_TRUE;
+
+}
+
+JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, 
+        JSObject *desc, TaintOp op)
+{
+    //source of taint is set as NULL here. I wonder if we can be a 
+    //bit more precise
+    TaintDependencyEntry *newDependencyEntry = addDependentEntry(cx, tainter, taintee, NULL, op);
+
+    if(!newDependencyEntry)
+    {
+        return JS_FALSE;
+    }
+
+    newDependencyEntry->description = desc;
+
+    return JS_TRUE;
+}
+
+
+
+
+
+
+JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
+{
+    TaintDependencyEntry *currentDep;
+    TaintDependencyEntry *nextDep;
 
     if(entryToRemoveFrom)
     {
-        currentDep = entryToRemoveFrom->dep;
+        currentDep = entryToRemoveFrom->taintee;
 
         while(currentDep)
         {
-            if(currentDep->entry)
+            if(currentDep->tainter)
             {
-                JS_ASSERT(currentDep->entry->refCount > 0);
-                currentDep->entry->refCount--;
+                JS_ASSERT(currentDep->tainter->refCount > 0);
+                currentDep->tainter->refCount--;
             }
            
-            nextDep = currentDep->next;
+            nextDep = currentDep->myDependencyEntry;
             free(currentDep);
             currentDep = nextDep;
         }
 
-        entryToRemoveFrom->dep=NULL;
+        entryToRemoveFrom->taintee=NULL;
         return JS_TRUE;
 
     }
@@ -71,7 +263,7 @@ JSBool removeInfoTaintEntryDeps( InfoTaintEntry *entryToRemoveFrom)
  * */
 static JSBool markLiveObjects(JSContext *cx, JSGCStatus theStatus)
 {
-    InfoTaintEntry *tmpTaintEntry ,*prevTaintEntry;
+    TaintInfoEntry *tmpTaintEntry ,*prevTaintEntry;
     jsuint isFirst=1;
     if (JSGC_MARK_END!=theStatus)
     {
@@ -137,11 +329,11 @@ static JSBool markLiveObjects(JSContext *cx, JSGCStatus theStatus)
             }
             if(!refCount)
             {
-                InfoTaintEntry *_tmpTaintEntry=tmpTaintEntry;
+                TaintInfoEntry *_tmpTaintEntry=tmpTaintEntry;
 #ifdef DEBUGVERBOSE
                 printf("Ok, refCount: %d\n",refCount);
 #endif
-                removeInfoTaintEntryDeps(tmpTaintEntry);
+                removeTaintDependencyEntry(tmpTaintEntry);
                 
                 if(isFirst)
                 {
@@ -150,7 +342,7 @@ static JSBool markLiveObjects(JSContext *cx, JSGCStatus theStatus)
                         cx->runtime->rootTaintEntry->taintedString = NULL;
                         cx->runtime->rootTaintEntry->origin = NULL;
                         cx->runtime->rootTaintEntry->refCount = 0;
-                        cx->runtime->rootTaintEntry->dep = NULL;
+                        cx->runtime->rootTaintEntry->taintee = NULL;
                         cx->runtime->rootTaintEntry->nextEntry = NULL;
                         
                         tmpTaintEntry = prevTaintEntry = cx->runtime->rootTaintEntry;
@@ -190,7 +382,7 @@ JSBool InitTaintEntries(JSRuntime *runtime)
     //register a new garbage collector callback and save the old one in the garbage
     //collector manager
     GCMI._oldCallback=  JS_SetGCCallbackRT(runtime, &markLiveObjects);
-    InfoTaintEntry *newTaintEntry = (InfoTaintEntry *)malloc((size_t)sizeof(InfoTaintEntry));
+    TaintInfoEntry *newTaintEntry = (TaintInfoEntry *)malloc((size_t)sizeof(TaintInfoEntry));
 
     if(!newTaintEntry)
     {
@@ -202,97 +394,33 @@ JSBool InitTaintEntries(JSRuntime *runtime)
     newTaintEntry->refCount = 0;
     newTaintEntry->op = NONEOP;
     newTaintEntry->nextEntry = NULL;
-    newTaintEntry->dep = NULL;
+    newTaintEntry->taintee = NULL;
     runtime->rootTaintEntry=newTaintEntry;
 
     return JS_TRUE;
 
 }
 
-InfoTaintEntry *findTaintEntry(JSContext *cx,JSString *stringToFind)
+
+
+
+
+JSString* taint_newTaintedString(JSContext *cx, JSString* originalString)
 {
-    InfoTaintEntry *currentEntry = cx->runtime->rootTaintEntry;
+    int length = originalString->length();
+    const jschar *chars = originalString->getChars(cx);
+    JSString* copy = js_NewStringCopyN(cx, chars, length);
 
-    if(!currentEntry)
+
+    if(!copy)
     {
-        return NULL;
+        return JS_FALSE;
     }
 
-    do
-    {
-        if(currentEntry->taintedString == stringToFind)
-        {
-            return currentEntry;
-        }
-        else
-        {
-            currentEntry = currentEntry->nextEntry;
-        }
-    }while(currentEntry);
+    copy->setTainted();
+    return copy;
 
-    return NULL;
-}
 
-InfoTaintEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
-        TaintOp taintOp)
-{
-    InfoTaintEntry *newTaintEntry;
-    InfoTaintEntry *tempTaintEntry = findTaintEntry(cx, str);
-    
-    if(tempTaintEntry != NULL && tempTaintEntry->op == taintOp)
-    {
-        return tempTaintEntry;
-    }
-
-    //we should have a runtime and the rootTaintEntry
-    //should have been initialized in jsapi.cpp in JSRuntime::init()
-
-    if(!cx->runtime || !cx->runtime->rootTaintEntry)
-    {
-        return NULL;
-    }
-
-    //nothing has been tainted so far, make the new taint
-    //entry be the root entry that has been initialized
-    //when the runtime was initialized
-    if(cx->runtime->rootTaintEntry->taintedString == NULL)
-    {
-        //since this has already been initialized, we don't need
-        //to call alloc again
-
-        newTaintEntry = cx->runtime->rootTaintEntry;
-        newTaintEntry->taintedString = str;
-        newTaintEntry->origin = source;
-        newTaintEntry->op = taintOp;
-        newTaintEntry->dep = NULL;
-    }
-    else
-    {
-        //this is a whole new entry and we already have at least one entry in the taint list
-        newTaintEntry = (InfoTaintEntry *) JS_malloc(cx, (size_t) sizeof(InfoTaintEntry));
-
-        if(!newTaintEntry)
-        {
-            return NULL;//allocation failed
-        }
-        
-        newTaintEntry->taintedString = str;
-        newTaintEntry->origin=source;
-        newTaintEntry->op=taintOp;
-        newTaintEntry->dep=NULL;
-        
-        //make the new entry the root and the 
-        //current root the new entry's next entry
-        tempTaintEntry = cx->runtime->rootTaintEntry;
-        newTaintEntry->nextEntry = tempTaintEntry;
-        cx->runtime->rootTaintEntry = newTaintEntry;
-
-    }
-    
-    //no one is referring to this entry yet, 
-    //since it's newly added - set the refCount to 0.
-    newTaintEntry->refCount = 0; 
-    return NULL;
 }
 
 JSBool taint_newTainted(JSContext *cx, uintN argc, jsval *vp)
