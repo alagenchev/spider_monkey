@@ -278,13 +278,17 @@ js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
                  right->asCell()->compartment() == cx->compartment);
 
     size_t leftLen = left->length();
+    size_t rightLen = right->length();
+
+    //we don't want to return without tainting
+    //if taint is on
+#ifndef TAINT_ON_
     if (leftLen == 0)
         return right;
 
-    size_t rightLen = right->length();
     if (rightLen == 0)
         return left;
-
+#endif
 
     size_t wholeLength = leftLen + rightLen;
 
