@@ -273,9 +273,9 @@ JSString * JS_FASTCALL
 js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
 {
     JS_ASSERT_IF(!JSString::isStatic(left) && !left->isAtomized(),
-                 left->asCell()->compartment() == cx->compartment);
+            left->asCell()->compartment() == cx->compartment);
     JS_ASSERT_IF(!JSString::isStatic(right) && !right->isAtomized(),
-                 right->asCell()->compartment() == cx->compartment);
+            right->asCell()->compartment() == cx->compartment);
 
     size_t leftLen = left->length();
     size_t rightLen = right->length();
@@ -324,7 +324,7 @@ js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
         }
 
 
-        #endif
+#endif
 
         return shortStr->header();
     }
@@ -344,6 +344,22 @@ js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
         return NULL;
 
     newRoot->initRopeNode(left, right, wholeLength);
+
+#ifdef TAINT_ON_
+
+    if(left->isTainted() || right->isTainted())
+    {
+        JSString* taintedString = taint_newTaintedString(cx, newRoot); 
+
+        taint_addConcatStringTaintInfos(cx, left, right, newRoot);
+
+        return taintedString;;
+    }
+
+
+#endif
+
+
     return newRoot;
 }
 
