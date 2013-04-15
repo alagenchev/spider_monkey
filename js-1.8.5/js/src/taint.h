@@ -19,7 +19,7 @@ typedef struct TaintInfoEntry
     jsuint refCount;
     TaintOp  op;
     JSString *origin;
-    struct TaintDependencyEntry *taintee;
+    struct TaintDependencyEntry *nextTaintee;
     struct TaintInfoEntry *nextEntry;
 } TaintInfoEntry;
 
@@ -30,7 +30,7 @@ typedef struct TaintDependencyEntry
     int startPosition;
     int endPosition;
     JSObject *description;
-    struct TaintDependencyEntry *myDependencyEntry;
+    struct TaintDependencyEntry *nextDependencyEntry;
 } TaintDependencyEntry;
 
 #endif

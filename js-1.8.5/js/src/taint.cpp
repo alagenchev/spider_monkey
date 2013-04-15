@@ -79,7 +79,7 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
         newTaintEntry->taintedString = str;
         newTaintEntry->origin = source;
         newTaintEntry->op = taintOp;
-        newTaintEntry->taintee = NULL;
+        newTaintEntry->nextTaintee = NULL;
     }
     else
     {
@@ -94,7 +94,7 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
         newTaintEntry->taintedString = str;
         newTaintEntry->origin=source;
         newTaintEntry->op=taintOp;
-        newTaintEntry->taintee=NULL;
+        newTaintEntry->nextTaintee=NULL;
         
         //make the new entry the root and the 
         //current root the new entry's next entry
@@ -114,20 +114,11 @@ TaintDependencyEntry *addTaintDependencyEntry(JSContext *cx, TaintInfoEntry *ori
 {
     TaintDependencyEntry *newDependency;
     newDependency = (TaintDependencyEntry *) JS_malloc(cx, (size_t) sizeof(TaintDependencyEntry));
+    newDependency->nextDependencyEntry = NULL;
 
     if(!newDependency)
     {
         return NULL;
-    }
-
-
-    if(newTaintEntry->taintee)
-    {
-        newDependency->myDependencyEntry = newTaintEntry->taintee;
-    }
-    else
-    {
-        newDependency->myDependencyEntry = NULL;
     }
 
     if(originalEntry)
@@ -161,16 +152,21 @@ TaintDependencyEntry *addDependentEntry(JSContext *cx, JSString *tainter, JSStri
         return NULL;
     }
 
-    TaintDependencyEntry *newDependencyEntry  = addTaintDependencyEntry(cx, originalEntry, newTaintEntry);
+    TaintDependencyEntry *newDependency = addTaintDependencyEntry(cx, originalEntry, newTaintEntry);
 
-    if(!newDependencyEntry)
+    if(!newDependency)
     {
         return NULL;
     }
 
-    newTaintEntry->taintee = newDependencyEntry;
+    if(newTaintEntry->nextTaintee)
+    {
+        //add new dependency to head
+        newDependency->nextDependencyEntry = newTaintEntry->nextTaintee;
+        newTaintEntry->nextTaintee = newDependency;
+    }
 
-    return newDependencyEntry;
+    return newDependency;
 
 }
 
@@ -212,10 +208,6 @@ JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee,
 }
 
 
-
-
-
-
 JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
 {
     TaintDependencyEntry *currentDep;
@@ -223,7 +215,7 @@ JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
 
     if(entryToRemoveFrom)
     {
-        currentDep = entryToRemoveFrom->taintee;
+        currentDep = entryToRemoveFrom->nextTaintee;
 
         while(currentDep)
         {
@@ -233,12 +225,12 @@ JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
                 currentDep->tainter->refCount--;
             }
            
-            nextDep = currentDep->myDependencyEntry;
+            nextDep = currentDep->nextDependencyEntry;
             free(currentDep);
             currentDep = nextDep;
         }
 
-        entryToRemoveFrom->taintee=NULL;
+        entryToRemoveFrom->nextTaintee=NULL;
         return JS_TRUE;
 
     }
@@ -257,7 +249,7 @@ JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
 
 /*
  *Ivan Note: the following appears to be Stefano's callback that
- deals with the problem he's described above. I'm not sure about the
+ deals with the problem he's described above(his note about the callback). I'm not sure about the
  historical reasoning behind it, why it's needed, or how it works
  therefore I'm copying it as it is with just a little cleanup.
  * */
@@ -342,7 +334,7 @@ static JSBool markLiveObjects(JSContext *cx, JSGCStatus theStatus)
                         cx->runtime->rootTaintEntry->taintedString = NULL;
                         cx->runtime->rootTaintEntry->origin = NULL;
                         cx->runtime->rootTaintEntry->refCount = 0;
-                        cx->runtime->rootTaintEntry->taintee = NULL;
+                        cx->runtime->rootTaintEntry->nextTaintee = NULL;
                         cx->runtime->rootTaintEntry->nextEntry = NULL;
                         
                         tmpTaintEntry = prevTaintEntry = cx->runtime->rootTaintEntry;
@@ -394,7 +386,7 @@ JSBool InitTaintEntries(JSRuntime *runtime)
     newTaintEntry->refCount = 0;
     newTaintEntry->op = NONEOP;
     newTaintEntry->nextEntry = NULL;
-    newTaintEntry->taintee = NULL;
+    newTaintEntry->nextTaintee = NULL;
     runtime->rootTaintEntry=newTaintEntry;
 
     return JS_TRUE;
