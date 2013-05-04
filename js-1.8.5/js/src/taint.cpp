@@ -10,6 +10,18 @@
 #include "jsvalue.h"
 #include "jsgc.h"
 
+
+JSBool traverseInfoTaintEntry(JSContext *cx, TaintInfoEntry *taintEntry, JSObject *result);
+
+const char *const OpNames[] = {
+    "NONE","GET","SET","SOURCE","SINK","CHARAT","SUBSTRING","LOWERCASE","UPPERCASE",
+    "JOIN","SPLIT","SLICE","REPLACE","REGEXP","CONCAT","CONCATLEFT","CONCATRIGHT",
+    "ESCAPE","UNESCAPE","ENCODEURI","DECODEURI","ENCODEURICOMPONENT","DECODEURICOMPONENT",
+    "TRIM","TAGIFY","QUOTE","DEPEND","ATOB","BTOA"};
+                               
+const int OpSize=sizeof(OpNames)/sizeof(OpNames[0]);
+
+
 /*******************
  *  XXXStefano Note:
  *   GC Callback solution is used
@@ -24,6 +36,11 @@ static struct GCManagerInfo
     JSGCCallback _oldCallback;
 } GCMI;
 
+/*
+ * Goes through the taint entry table looking for a taint entry
+ * for the specified string. If the entry exists in the table
+ * it returns the entry, otherwise it will return NULL
+ */
 TaintInfoEntry *findTaintEntry(JSContext *cx,JSString *stringToFind)
 {
     TaintInfoEntry *currentEntry = cx->runtime->rootTaintEntry;
@@ -56,6 +73,7 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
     
     if(tempTaintEntry != NULL && tempTaintEntry->op == taintOp)
     {
+        //an entry already exists, we found it and we are returning it
         return tempTaintEntry;
     }
 
@@ -79,7 +97,7 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
         newTaintEntry->taintedString = str;
         newTaintEntry->origin = source;
         newTaintEntry->op = taintOp;
-        newTaintEntry->nextTaintee = NULL;
+        newTaintEntry->myTaintDependencies = NULL;
     }
     else
     {
@@ -94,7 +112,7 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
         newTaintEntry->taintedString = str;
         newTaintEntry->origin=source;
         newTaintEntry->op=taintOp;
-        newTaintEntry->nextTaintee=NULL;
+        newTaintEntry->myTaintDependencies=NULL;
         
         //make the new entry the root and the 
         //current root the new entry's next entry
@@ -107,7 +125,7 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
     //no one is referring to this entry yet, 
     //since it's newly added - set the refCount to 0.
     newTaintEntry->refCount = 0; 
-    return NULL;
+    return newTaintEntry;
 }
 TaintDependencyEntry *addTaintDependencyEntry(JSContext *cx, TaintInfoEntry *originalEntry, 
         TaintInfoEntry *newTaintEntry)
@@ -159,12 +177,13 @@ TaintDependencyEntry *addDependentEntry(JSContext *cx, JSString *tainter, JSStri
         return NULL;
     }
 
-    if(newTaintEntry->nextTaintee)
+    if(newTaintEntry->myTaintDependencies)
     {
         //add new dependency to head
-        newDependency->nextDependencyEntry = newTaintEntry->nextTaintee;
-        newTaintEntry->nextTaintee = newDependency;
+        newDependency->nextDependencyEntry = newTaintEntry->myTaintDependencies;
     }
+
+    newTaintEntry->myTaintDependencies = newDependency;
 
     return newDependency;
 
@@ -207,6 +226,196 @@ JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee,
     return JS_TRUE;
 }
 
+JSBool traverseTaintees(JSContext *cx, TaintDependencyEntry *taintee, JSString *taintedString, 
+        JSObject *result, JSObject *arrayOfDependencies)
+{
+    jsval jsValue;
+
+    int index = 0;
+
+    while(taintee != NULL && taintee->tainter != NULL)
+    {
+
+        JSObject *description = JS_NewObject(cx, NULL, NULL, NULL);
+        jsValue = INT_TO_JSVAL(taintee->startPosition);
+
+        JSBool setResult = JS_SetProperty(cx, description, "StartPosition", &jsValue);
+
+        if(!setResult)
+        {
+            return JS_FALSE;
+        }
+
+        jsValue = INT_TO_JSVAL(taintee->endPosition);
+
+        setResult = JS_SetProperty(cx, description, "EndPosition", &jsValue);
+
+        if(!setResult)
+        {
+            return JS_FALSE;
+        }
+
+        if(taintee->description != NULL)
+        {
+            jsValue = OBJECT_TO_JSVAL(taintee->description);
+
+            setResult = JS_SetProperty(cx, description, "Description", &jsValue);
+
+            if(!setResult)
+            {
+                return JS_FALSE;
+            }
+        }
+
+        //traverse the tainter and add its properties to description object
+        setResult = traverseInfoTaintEntry(cx, taintee->tainter, description);
+
+        if(!setResult)
+        {
+            return JS_FALSE;
+        }
+
+        jsValue = OBJECT_TO_JSVAL(description);
+
+        setResult = JS_SetElement(cx, arrayOfDependencies, index, &jsValue);
+
+        if(!setResult)
+        {
+            return JS_FALSE;
+        }
+
+        index ++;
+        taintee = taintee->nextDependencyEntry;
+    }
+
+    return JS_TRUE;
+}
+
+
+//traverses through the taintEntry and sets the appropriate properties in the javascript
+//result object
+JSBool traverseInfoTaintEntry(JSContext *cx, TaintInfoEntry *taintEntry, JSObject *result)
+{
+    if(!taintEntry->taintedString)
+    {
+        return JS_FALSE;
+    }
+
+    jsval stringVal = STRING_TO_JSVAL(taintEntry->taintedString);
+
+    bool setProperty = JS_SetProperty(cx, result, "val", &stringVal);
+
+    if(!setProperty)
+    {
+        return JS_FALSE;
+    }
+
+    if(taintEntry->origin)
+    {
+        jsval originVal = STRING_TO_JSVAL(taintEntry->origin);
+        JS_SetProperty(cx, result, "origin", &originVal);
+    }
+
+    int opIndex = (int)taintEntry->op;
+    JSString *operationString = JS_NewStringCopyZ(cx, OpNames[opIndex]);
+    jsval operationVal = STRING_TO_JSVAL(operationString);
+
+    setProperty = JS_SetProperty(cx, result, "op", &operationVal);
+    if(!setProperty)
+    {
+        return JS_FALSE;
+    }
+
+    if(taintEntry->myTaintDependencies && taintEntry->op <=OpSize)
+    {
+        JSObject *taintees = JS_NewArrayObject(cx, 0, NULL);
+
+
+        //corresponds to traverseInfoTaintDep
+        bool traversedTaintees = traverseTaintees(cx, taintEntry->myTaintDependencies, 
+                taintEntry->taintedString, result, taintees);
+
+        if(!traversedTaintees)
+        {
+            return JS_FALSE;
+        }
+
+
+        jsval tainteesVal = OBJECT_TO_JSVAL(taintees);
+
+        setProperty = JS_SetProperty(cx, result, "tainters", &tainteesVal);
+        if(!setProperty)
+        {
+            return JS_FALSE;
+        }
+    }
+
+    return JS_TRUE;
+}
+
+JSObject *getInfoFromTaintTable(JSContext *cx, JSString *str, JSBool &result)
+{
+    TaintInfoEntry *entry = findTaintEntry(cx, str);
+    JSObject *info;
+    result = JS_FALSE;
+
+    if(entry == NULL)
+    {
+        //entry doesn't exist in the table;
+        result = JS_TRUE;
+        return NULL;
+    }
+
+    if(entry != NULL)
+    {
+        info = JS_NewObject(cx, NULL, NULL, NULL);
+        if(!info)
+        {
+            //failed at constructing the object
+            result = JS_FALSE;
+            return NULL;
+        }
+
+        //traverse the info entry and assign the appropriate properties
+        //in the java script result object
+        bool traversed = traverseInfoTaintEntry(cx, entry, info);
+        if(!traversed)
+        {
+            return NULL;
+        }
+        else
+        {
+            result = JS_TRUE;
+            return info;
+        }
+    }
+
+    return info;
+}
+
+JSBool taint_getTaintInfo(JSContext *cx, uintN argc, jsval *vp)
+{
+    jsval *argv = vp + 2;
+    JSBool result;
+
+    if(JSVAL_IS_STRING(argv[0]))
+    {
+        JSString *str = JSVAL_TO_STRING(argv[0]);
+        JSObject *infoObject = getInfoFromTaintTable(cx, str, result);
+
+        if(result == JS_FALSE)
+        {
+            *vp = JSVAL_VOID; //failed retrieving info
+            return JS_FALSE;
+        }
+        
+        //return the result if everything came back fine
+        *vp = OBJECT_TO_JSVAL(infoObject);
+        return JS_TRUE;
+    }
+
+    return JS_FALSE;
+}
 
 JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
 {
@@ -215,7 +424,7 @@ JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
 
     if(entryToRemoveFrom)
     {
-        currentDep = entryToRemoveFrom->nextTaintee;
+        currentDep = entryToRemoveFrom->myTaintDependencies;
 
         while(currentDep)
         {
@@ -230,7 +439,7 @@ JSBool removeTaintDependencyEntry( TaintInfoEntry *entryToRemoveFrom)
             currentDep = nextDep;
         }
 
-        entryToRemoveFrom->nextTaintee=NULL;
+        entryToRemoveFrom->myTaintDependencies=NULL;
         return JS_TRUE;
 
     }
@@ -334,7 +543,7 @@ static JSBool markLiveObjects(JSContext *cx, JSGCStatus theStatus)
                         cx->runtime->rootTaintEntry->taintedString = NULL;
                         cx->runtime->rootTaintEntry->origin = NULL;
                         cx->runtime->rootTaintEntry->refCount = 0;
-                        cx->runtime->rootTaintEntry->nextTaintee = NULL;
+                        cx->runtime->rootTaintEntry->myTaintDependencies = NULL;
                         cx->runtime->rootTaintEntry->nextEntry = NULL;
                         
                         tmpTaintEntry = prevTaintEntry = cx->runtime->rootTaintEntry;
@@ -386,7 +595,7 @@ JSBool InitTaintEntries(JSRuntime *runtime)
     newTaintEntry->refCount = 0;
     newTaintEntry->op = NONEOP;
     newTaintEntry->nextEntry = NULL;
-    newTaintEntry->nextTaintee = NULL;
+    newTaintEntry->myTaintDependencies = NULL;
     runtime->rootTaintEntry=newTaintEntry;
 
     return JS_TRUE;

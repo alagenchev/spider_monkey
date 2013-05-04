@@ -318,7 +318,7 @@ js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
         {
             JSString* taintedString = taint_newTaintedString(cx, shortStr->header()); 
 
-            taint_addConcatStringTaintInfos(cx, left, right, shortStr->header());
+            taint_addConcatStringTaintInfos(cx, left, right, taintedString);
 
             return taintedString;
         }
@@ -351,7 +351,7 @@ js_ConcatStrings(JSContext *cx, JSString *left, JSString *right)
     {
         JSString* taintedString = taint_newTaintedString(cx, newRoot); 
 
-        taint_addConcatStringTaintInfos(cx, left, right, newRoot);
+        taint_addConcatStringTaintInfos(cx, left, right, taintedString);
 
         return taintedString;;
     }
@@ -703,6 +703,14 @@ JSBool str_getTaintedProperty(JSContext *cx, JSObject *obj, jsid id, jsval *vp)
     str = obj->getPrimitiveThis().toString();
     JSBool isTainted = taint_getTainted(cx, str, vp);
     return isTainted;
+}
+
+
+JSBool str_getTaintInfo(JSContext *cx, unsigned argc, jsval *vp)
+{
+    JSBool result = taint_getTaintInfo(cx, argc, vp);
+
+    return result;
 }
 
 JSPropertySpec taint_props[]

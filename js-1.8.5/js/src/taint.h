@@ -19,7 +19,7 @@ typedef struct TaintInfoEntry
     jsuint refCount;
     TaintOp  op;
     JSString *origin;
-    struct TaintDependencyEntry *nextTaintee;
+    struct TaintDependencyEntry *myTaintDependencies;
     struct TaintInfoEntry *nextEntry;
 } TaintInfoEntry;
 
@@ -38,10 +38,11 @@ typedef struct TaintDependencyEntry
 //macros to hook up javascript to cpp
 //it's used in jsstr.cpp
 #define HOOK_JS_TAINT_METHODS()\
+        JS_FN("getTaintInfo", str_getTaintInfo, 1, 0),\
         JS_FN("newTainted", str_newTainted, 2, 0),
 #endif //endif for TAINTED_ON
 
-
+extern JSBool taint_getTaintInfo(JSContext *cx, uintN argc, jsval *vp);
 extern JSBool taint_newTainted(JSContext *cx, uintN argc, jsval *vp);
 extern JSBool InitTaintEntries(JSRuntime *rt);
 extern JSBool taint_getTainted(JSContext *cx, JSString *str, jsval *vp);

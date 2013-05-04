@@ -44,3 +44,46 @@ function printResults(){
    print("Congratulations! All tests were correct");
    
 }
+
+
+function getObjectDetails(obj, indent)
+{
+
+    var info = "";
+
+    for(var propt in obj)
+    {
+        if(propt == "dep" || propt == "tainters")
+        {
+            info+="\n";
+        }
+
+
+        info+= propt;
+        info+=": ";
+        info+="\"";
+
+        var type = typeof obj[propt];
+
+        if(type == "object")
+        {
+
+            info+="{ ";
+            info+=getObjectDetails(obj[propt], indent);
+
+            info+="} ";
+        }
+        else
+        {
+            info+=obj[propt];
+
+            info+="\" ";
+        }
+
+        if(propt == "dep" || propt == "tainters")
+        {
+            info+="\n";
+        }
+    }
+    return info;
+}

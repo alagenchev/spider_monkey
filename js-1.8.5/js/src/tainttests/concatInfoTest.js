@@ -1,7 +1,7 @@
 load('./UnitTest.js');
 var zerolengthtainted=String.newTainted("","zerolength");
-var ts=String.newTainted("ddddd\nddd","dd");
-var ats=String.newTainted("aaagggg","ddd");
+var ts=String.newTainted("tsString","dd");
+var ats=String.newTainted("atsString","aaa");
 var zerolengthuntainted="";
 var longTainted = String.newTainted("aaaaaaaaaaaaaaaaaaaaaaaa", "asdf");
 var longUntainted = "aaaaaaaaaaaaaaaaaaaaaaaa"
@@ -9,6 +9,11 @@ var longUntainted = "aaaaaaaaaaaaaaaaaaaaaaaa"
 var concstr1=ts+ats;
 assert( "String Concat test ","concstr1.tainted",true)
 
+var infoResult = String.getTaintInfo(concstr1);
+
+print(getObjectDetails(infoResult));
+
+/*
 var concstr2=ts+ats+'dddd';
 assert( "String Concat test ","concstr2.tainted",true)
 
@@ -38,3 +43,4 @@ assert("testing values ","test8string","aaaaaaaaaaaaaaaaaaaaaaaa");
 var info = String.getTaintInfo(test8string);
 var description = getObjectDetails(info);
 print(description);
+*/
