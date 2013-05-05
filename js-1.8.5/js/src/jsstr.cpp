@@ -530,6 +530,10 @@ js_str_escape(JSContext *cx, uintN argc, Value *vp, Value *rval)
     JSLinearString *str = ArgToRootedString(cx, argc, vp, 0);
     if (!str)
         return JS_FALSE;
+#ifdef TAINT_ON_
+    JSString *original = NULL;
+    TAINT_CONDITION(str)
+#endif
 
     size_t length = str->length();
     const jschar *chars = str->chars();
@@ -596,6 +600,9 @@ js_str_escape(JSContext *cx, uintN argc, Value *vp, Value *rval)
         cx->free(newchars);
         return JS_FALSE;
     }
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET(retstr, original, NULL, ESCAPE);
+#endif
     rval->setString(retstr);
     return JS_TRUE;
 }
