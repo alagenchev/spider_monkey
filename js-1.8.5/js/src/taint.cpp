@@ -149,6 +149,10 @@ TaintDependencyEntry *addTaintDependencyEntry(JSContext *cx, TaintInfoEntry *ori
         newDependency->tainter = NULL;
     }
 
+    newDependency->startPosition = -1;
+    newDependency->endPosition = -1;
+    newDependency->description = NULL;
+
     return newDependency;
 }
 //this method adds to both the dependency table and the taint table

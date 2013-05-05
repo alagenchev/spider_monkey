@@ -59,6 +59,11 @@ function getObjectDetails(obj, indent)
         }
 
 
+        if(!isNaN(propt))
+        {
+            info+="\n\t";
+        }
+
         info+= propt;
         info+=": ";
         info+="\"";
@@ -71,18 +76,23 @@ function getObjectDetails(obj, indent)
             info+="{ ";
             info+=getObjectDetails(obj[propt], indent);
 
-            info+="} ";
+            info+="}";
+
         }
         else
         {
             info+=obj[propt];
 
-            info+="\" ";
+            info+="\"";
         }
 
         if(propt == "dep" || propt == "tainters")
         {
             info+="\n";
+        }
+        else
+        {
+            info+=" ";
         }
     }
     return info;

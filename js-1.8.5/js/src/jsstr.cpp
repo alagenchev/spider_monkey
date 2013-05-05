@@ -857,11 +857,22 @@ static JSBool
 str_quote(JSContext *cx, uintN argc, Value *vp)
 {
     JSString *str = ThisToStringForStringProto(cx, vp);
+#ifdef TAINT_ON_
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(str)
+#endif
     if (!str)
         return false;
     str = js_QuoteString(cx, str, '"');
     if (!str)
         return false;
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET(str, original, NULL, QUOTE);
+#endif
     vp->setString(str);
     return true;
 }
