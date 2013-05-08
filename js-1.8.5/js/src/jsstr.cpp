@@ -5812,6 +5812,27 @@ Decode(JSContext *cx, JSString *str, const jschar *reservedSet, Value *rval)
         return JS_FALSE;
 
     if (length == 0) {
+#ifdef TAINT_ON_
+        if(str->isTainted())
+        {
+            JSString *return_string = taint_newTaintedString(cx,str);
+            rval->setString(return_string);
+            TaintOp op;
+
+            if(reservedSet == js_empty_ucstr)
+            {
+                op = UNENCODEURICOMPONENT;
+            }
+            else
+            {
+                op = UNENCODEURI;
+            }
+
+            addTaintInfo(cx, str, return_string, NULL, op);
+
+            return JS_TRUE;
+        }
+#endif
         rval->setString(cx->runtime->emptyString);
         return JS_TRUE;
     }
@@ -5877,7 +5898,38 @@ Decode(JSContext *cx, JSString *str, const jschar *reservedSet, Value *rval)
         }
     }
 
-    return TransferBufferToString(cx, sb, rval);
+#ifdef TAINT_ON_
+
+    
+    if(!TransferBufferToString(cx, sb, rval))
+    {
+        return JS_FALSE;
+    }
+
+    if(str->isTainted())
+    {
+        JSString *return_string = rval->toString();
+        return_string->setTainted();
+        TaintOp op;
+
+        if(reservedSet == js_empty_ucstr)
+        {
+            op = UNENCODEURICOMPONENT;
+        }
+        else
+        {
+            op = UNENCODEURI;
+        }
+
+
+        addTaintInfo(cx, str, return_string, NULL, op);
+    }
+
+    return JS_TRUE;
+#else
+        return TransferBufferToString(cx, sb, rval);
+#endif
+
 
   report_bad_uri:
     JS_ReportErrorNumber(cx, js_GetErrorMessage, NULL, JSMSG_BAD_URI);
