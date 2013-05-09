@@ -5821,11 +5821,11 @@ Decode(JSContext *cx, JSString *str, const jschar *reservedSet, Value *rval)
 
             if(reservedSet == js_empty_ucstr)
             {
-                op = UNENCODEURICOMPONENT;
+                op = DECODEURICOMPONENT;
             }
             else
             {
-                op = UNENCODEURI;
+                op = DECODEURI;
             }
 
             addTaintInfo(cx, str, return_string, NULL, op);
@@ -5914,11 +5914,11 @@ Decode(JSContext *cx, JSString *str, const jschar *reservedSet, Value *rval)
 
         if(reservedSet == js_empty_ucstr)
         {
-            op = UNENCODEURICOMPONENT;
+            op = DECODEURICOMPONENT;
         }
         else
         {
-            op = UNENCODEURI;
+            op = DECODEURI;
         }
 
 
