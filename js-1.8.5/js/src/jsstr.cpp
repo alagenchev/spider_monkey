@@ -5750,7 +5750,29 @@ Encode(JSContext *cx, JSString *str, const jschar *unescapedSet,
     if (!chars)
         return JS_FALSE;
 
-    if (length == 0) {
+    if (length == 0) 
+    {
+#ifdef TAINT_ON_
+        if(str->isTainted())
+        {
+            JSString *return_string = taint_newTaintedString(cx,str);
+            rval->setString(return_string);
+            TaintOp op;
+
+            if(unescapedSet2 == NULL)
+            {
+                op = ENCODEURICOMPONENT;
+            }
+            else
+            {
+                op = ENCODEURI;
+            }
+
+            addTaintInfo(cx, str, return_string, NULL, op);
+
+            return JS_TRUE;
+        }
+#endif
         rval->setString(cx->runtime->emptyString);
         return JS_TRUE;
     }
@@ -5800,7 +5822,38 @@ Encode(JSContext *cx, JSString *str, const jschar *unescapedSet,
         }
     }
 
-    return TransferBufferToString(cx, sb, rval);
+#ifdef TAINT_ON_
+
+    
+    if(!TransferBufferToString(cx, sb, rval))
+    {
+        return JS_FALSE;
+    }
+
+    if(str->isTainted())
+    {
+        JSString *return_string = rval->toString();
+        return_string->setTainted();
+        TaintOp op;
+
+        if(unescapedSet2 == NULL)
+        {
+            op = ENCODEURICOMPONENT;
+        }
+        else
+        {
+            op = ENCODEURI;
+        }
+
+
+        addTaintInfo(cx, str, return_string, NULL, op);
+    }
+
+    return JS_TRUE;
+#else
+        return TransferBufferToString(cx, sb, rval);
+#endif
+
 }
 
 static JSBool
