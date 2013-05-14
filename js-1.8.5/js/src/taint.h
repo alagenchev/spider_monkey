@@ -33,6 +33,15 @@ typedef enum taintop {NONEOP,GET,SET,SOURCE,SINK,CHARAT,SUBSTRING,LOWERCASE,UPPE
         addTaintInfo(cx, originalString, stringAfterOps, description, op);\
     }
 
+#define  TAINT_CONDITIONAL_SET_NEW(stringAfterOps,originalString,description,op) \
+    if(tainted){\
+        stringAfterOps = taint_newTaintedString(cx, stringAfterOps);\
+        stringAfterOps -> setTainted();\
+        addTaintInfo(cx, originalString, stringAfterOps, description, op);\
+    }
+
+
+
 typedef struct TaintInfoEntry
 {
     JSString *taintedString;

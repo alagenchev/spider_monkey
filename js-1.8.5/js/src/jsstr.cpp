@@ -1629,6 +1629,15 @@ js_TrimString(JSContext *cx, Value *vp, JSBool trimLeft, JSBool trimRight)
     JSString *str = ThisToStringForStringProto(cx, vp);
     if (!str)
         return false;
+#ifdef TAINT_ON_
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(str)
+#endif
+
     size_t length = str->length();
     const jschar *chars = str->getChars(cx);
     if (!chars)
@@ -1650,6 +1659,10 @@ js_TrimString(JSContext *cx, Value *vp, JSBool trimLeft, JSBool trimRight)
     str = js_NewDependentString(cx, str, begin, end - begin);
     if (!str)
         return false;
+
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET_NEW(str, original, NULL, TRIM);
+#endif
 
     vp->setString(str);
     return true;
