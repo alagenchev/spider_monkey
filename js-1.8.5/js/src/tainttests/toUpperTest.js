@@ -10,10 +10,8 @@ var fun=  String.toUpperCase
 var ets=  fun(ts);
 assert("String toUpperCase test ","ets.tainted",true)
 
-/*
 var ets1= fun(zerolengthtainted );
 assert("String toUpperCase test ","ets1.tainted",true);
 
 var ets2= fun(zerolengthuntainted );
 assert("String toUpperCase test ","ets2.tainted",false)
-*/

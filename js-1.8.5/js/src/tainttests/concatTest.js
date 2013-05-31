@@ -37,4 +37,3 @@ assert("testing values ","test8string","aaaaaaaaaaaaaaaaaaaaaaaa");
 
 var info = String.getTaintInfo(test8string);
 var description = getObjectDetails(info);
-print(description);
