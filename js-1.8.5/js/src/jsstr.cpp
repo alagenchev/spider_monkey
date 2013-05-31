@@ -973,6 +973,18 @@ str_substring(JSContext *cx, uintN argc, Value *vp)
         return false;
 
     int32 length, begin, end;
+
+#ifdef TAINT_ON_
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(str)
+#endif
+
+
+
     if (argc > 0) {
         end = length = int32(str->length());
 
@@ -1005,6 +1017,11 @@ str_substring(JSContext *cx, uintN argc, Value *vp)
         if (!str)
             return false;
     }
+
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET_NEW(str, original, NULL, SUBSTRING);
+#endif
+
 
     vp->setString(str);
     return true;
