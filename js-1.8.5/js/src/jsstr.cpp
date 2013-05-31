@@ -720,13 +720,12 @@ JSBool str_getTaintInfo(JSContext *cx, unsigned argc, jsval *vp)
     return result;
 }
 
-JSPropertySpec taint_props[]
+JSPropertySpec taint_props[] =
 {
     {
         "tainted", 1, //-1 is the tinyid of this property. it should be a unique 
             //property id for this object
             JSPROP_PERMANENT|JSPROP_SHARED, str_getTaintedProperty, 0//0 for no setter
-            //JSPROP_PERMANENT, str_getTaintedProperty, 0//0 for no setter
     },
     {0,0,0,0,0}//JS_DefineProperties expects a null element as last element 
                //to indicate end of array
