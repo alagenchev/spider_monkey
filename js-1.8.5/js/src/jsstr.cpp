@@ -3022,6 +3022,16 @@ str_slice(JSContext *cx, uintN argc, Value *vp)
         size_t begin, end, length;
 
         JSString *str = vp[1].toString();
+
+#ifdef TAINT_ON_
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(str)
+#endif
+
         begin = vp[2].toInt32();
         end = str->length();
         if (begin <= end) {
@@ -3035,6 +3045,11 @@ str_slice(JSContext *cx, uintN argc, Value *vp)
                 if (!str)
                     return JS_FALSE;
             }
+
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET_NEW(str, original, NULL, SLICE);
+#endif
+
             vp->setString(str);
             return JS_TRUE;
         }
@@ -3043,6 +3058,15 @@ str_slice(JSContext *cx, uintN argc, Value *vp)
     JSString *str = ThisToStringForStringProto(cx, vp);
     if (!str)
         return false;
+
+#ifdef TAINT_ON_ //separate scope from the above TAINT_CONDITION, so we need a redeclaration
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(str)
+#endif
 
     if (argc != 0) {
         double begin, end, length;
@@ -3082,6 +3106,11 @@ str_slice(JSContext *cx, uintN argc, Value *vp)
         if (!str)
             return JS_FALSE;
     }
+
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET_NEW(str, original, NULL, SLICE);
+#endif
+
     vp->setString(str);
     return JS_TRUE;
 }
