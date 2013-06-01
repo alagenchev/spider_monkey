@@ -2823,6 +2823,17 @@ str_split(JSContext *cx, uintN argc, Value *vp)
     if (!str)
         return false;
 
+#ifdef TAINT_ON_
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(str)
+#endif
+
+
+
     if (argc == 0) {
         Value v = StringValue(str);
         JSObject *aobj = NewDenseCopiedArray(cx, 1, &v);
@@ -2883,6 +2894,12 @@ str_split(JSContext *cx, uintN argc, Value *vp)
             break;
 
         JSString *sub = js_NewDependentString(cx, str, i, size_t(j - i));
+
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET_NEW(sub, original, NULL, SPLIT);
+#endif
+
+
         if (!sub || !splits.append(StringValue(sub)))
             return false;
         len++;
@@ -2899,6 +2916,9 @@ str_split(JSContext *cx, uintN argc, Value *vp)
                 JSSubString parsub;
                 res->getParen(num + 1, &parsub);
                 sub = js_NewStringCopyN(cx, parsub.chars, parsub.length);
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET(sub, original, NULL, SPLIT);
+#endif
                 if (!sub || !splits.append(StringValue(sub)))
                     return false;
                 len++;
