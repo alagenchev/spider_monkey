@@ -532,7 +532,7 @@ js_str_escape(JSContext *cx, uintN argc, Value *vp, Value *rval)
         return JS_FALSE;
 #ifdef TAINT_ON_
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
     size_t length = str->length();
@@ -795,6 +795,19 @@ str_resolve(JSContext *cx, JSObject *obj, jsid id, uintN flags,
         JSString *str1 = JSString::getUnitString(cx, str, size_t(slot));
         if (!str1)
             return JS_FALSE;
+
+#ifdef TAINT_ON_
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(str);
+
+    TAINT_CONDITIONAL_SET_NEW(str1, original, NULL, NONEOP);
+#endif
+
+
         if (!obj->defineProperty(cx, id, StringValue(str1), NULL, NULL,
                                  STRING_ELEMENT_ATTRS)) {
             return JS_FALSE;
@@ -869,7 +882,7 @@ str_quote(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
     if (!str)
         return false;
@@ -980,7 +993,7 @@ str_substring(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
 
@@ -1062,7 +1075,7 @@ str_toLowerCase(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
         str = js_toLowerCase(cx, str);
@@ -1128,7 +1141,7 @@ str_toUpperCase(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
 
@@ -1682,7 +1695,7 @@ js_TrimString(JSContext *cx, Value *vp, JSBool trimLeft, JSBool trimRight)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
     size_t length = str->length();
@@ -2829,7 +2842,7 @@ str_split(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
 
@@ -2952,7 +2965,7 @@ str_substr(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
 
@@ -3049,7 +3062,7 @@ str_slice(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
         begin = vp[2].toInt32();
@@ -3085,7 +3098,7 @@ str_slice(JSContext *cx, uintN argc, Value *vp)
     //very clear where the argument to TAINT_CONDITIONAL_SET
     //came from
     JSString *original = NULL;
-    TAINT_CONDITION(str)
+    TAINT_CONDITION(str);
 #endif
 
     if (argc != 0) {

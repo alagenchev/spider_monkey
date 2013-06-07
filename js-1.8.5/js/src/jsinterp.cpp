@@ -4507,11 +4507,25 @@ BEGIN_CASE(JSOP_GETELEM)
     Value &rref = regs.sp[-1];
     if (lref.isString() && rref.isInt32()) {
         JSString *str = lref.toString();
+#ifdef TAINT_ON_
+        //declaration of original is outside the macro
+        //to enhance readability. otherwise it's not
+        //very clear where the argument to TAINT_CONDITIONAL_SET
+        //came from
+        JSString *original = NULL;
+        TAINT_CONDITION(str);
+
+#endif
         int32_t i = rref.toInt32();
         if (size_t(i) < str->length()) {
             str = JSString::getUnitString(cx, str, size_t(i));
             if (!str)
                 goto error;
+
+#ifdef TAINT_ON_
+
+        TAINT_CONDITIONAL_SET_NEW(str, original, NULL, NONEOP);
+#endif
             regs.sp--;
             regs.sp[-1].setString(str);
             len = JSOP_GETELEM_LENGTH;
@@ -4556,7 +4570,7 @@ BEGIN_CASE(JSOP_GETELEM)
         if (ValueFitsInInt32(rref, &i) && INT_FITS_IN_JSID(i)) {
             id = INT_TO_JSID(i);
         } else {
-          intern_big_int:
+intern_big_int:
             if (!js_InternNonIntElementId(cx, obj, rref, &id))
                 goto error;
         }
@@ -4566,7 +4580,7 @@ BEGIN_CASE(JSOP_GETELEM)
         goto error;
     copyFrom = &rval;
 
-  end_getelem:
+end_getelem:
     regs.sp--;
     regs.sp[-1] = *copyFrom;
     assertSameCompartment(cx, regs.sp[-1]);
