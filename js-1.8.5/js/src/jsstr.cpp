@@ -2056,8 +2056,15 @@ str_match(JSContext *cx, uintN argc, Value *vp)
     RegExpGuard g(cx);
     if (!g.init(argc, vp))
         return false;
+#ifdef TAINT_ON_
+    if(!str->isTainted())
+    {
+#endif
     if (const FlatMatch *fm = g.tryFlatMatch(cx, str, 1, argc))
         return BuildFlatMatchArray(cx, str, *fm, vp);
+#ifdef TAINT_ON_
+}
+#endif
     if (cx->isExceptionPending())  /* from tryFlatMatch */
         return false;
 

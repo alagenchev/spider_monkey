@@ -283,6 +283,11 @@ RegExp::createResult(JSContext *cx, JSString *input, int *buf, size_t matchItemC
     if (!array)
         return NULL;
 
+#ifdef TAINT_ON_
+    JSString *original = NULL;
+    TAINT_CONDITION(input);
+#endif
+
     RegExpMatchBuilder builder(cx, array);
     for (size_t i = 0; i < matchItemCount; i += 2) {
         int start = buf[i];
@@ -293,6 +298,10 @@ RegExp::createResult(JSContext *cx, JSString *input, int *buf, size_t matchItemC
             JS_ASSERT(start <= end);
             JS_ASSERT(unsigned(end) <= input->length());
             captured = js_NewDependentString(cx, input, start, end - start);
+
+#ifdef TAINT_ON_
+            TAINT_CONDITIONAL_SET_NEW(captured, original, NULL, REGEXP);
+#endif
             if (!(captured && builder.append(i / 2, captured)))
                 return NULL;
         } else {
@@ -604,6 +613,12 @@ RegExpStatics::createDependent(JSContext *cx, size_t start, size_t end, Value *o
     JSString *str = js_NewDependentString(cx, matchPairsInput, start, end - start);
     if (!str)
         return false;
+
+#ifdef TAINT_ON_
+    JSBool tainted = matchPairsInput->isTainted();
+    TAINT_CONDITIONAL_SET_NEW(str, matchPairsInput, NULL, REGEXP);
+#endif
+
     *out = StringValue(str);
     return true;
 }
@@ -619,6 +634,15 @@ inline bool
 RegExpStatics::makeMatch(JSContext *cx, size_t checkValidIndex, size_t pairNum, Value *out) const
 {
     if (checkValidIndex / 2 >= pairCount() || matchPairs[checkValidIndex] < 0) {
+#ifdef TAINT_ON_
+        if(matchPairsInput->isTainted())
+        {
+            JSString *taintedResultString = taint_newTaintedString(cx, cx->runtime->emptyString);
+            addTaintInfo(cx, matchPairsInput, taintedResultString, NULL, REGEXP);
+            out->setString(taintedResultString);
+            return JS_TRUE;
+        }
+#endif
         out->setString(cx->runtime->emptyString);
         return true;
     }
