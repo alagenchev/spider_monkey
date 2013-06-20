@@ -1205,9 +1205,22 @@ js_str_charAt(JSContext *cx, uintN argc, Value *vp)
     JSString *str;
     jsint i;
     jsdouble d;
+#ifdef TAINT_ON_
+        JSBool tainted = JS_FALSE;
+        JSString *originalString;
+#endif
+
 
     if (vp[1].isString() && argc != 0 && vp[2].isInt32()) {
         str = vp[1].toString();
+
+#ifdef TAINT_ON_
+        if(str->isTainted())
+        {
+            tainted = JS_TRUE;
+            originalString = str;
+        }
+#endif
         i = vp[2].toInt32();
         if ((size_t)i >= str->length())
             goto out_of_range;
@@ -1215,6 +1228,13 @@ js_str_charAt(JSContext *cx, uintN argc, Value *vp)
         str = ThisToStringForStringProto(cx, vp);
         if (!str)
             return false;
+#ifdef TAINT_ON_
+        if(str->isTainted())
+        {
+            tainted = JS_TRUE;
+            originalString = str;
+        }
+#endif
 
         if (argc == 0) {
             d = 0.0;
@@ -1232,11 +1252,27 @@ js_str_charAt(JSContext *cx, uintN argc, Value *vp)
     str = JSString::getUnitString(cx, str, size_t(i));
     if (!str)
         return false;
+#ifdef TAINT_ON_
+    TAINT_CONDITIONAL_SET_NEW(str, originalString, NULL, CHARAT);
+#endif
     vp->setString(str);
     return true;
 
   out_of_range:
+#ifdef TAINT_ON_
+    if(tainted)
+    {
+        str = taint_newTaintedString(cx, cx->runtime->emptyString);
+        addTaintInfo(cx, originalString, str, NULL, CHARAT);
+        vp->setString(str);
+    }
+    else
+    {
+        vp->setString(cx->runtime->emptyString);
+    }
+#else
     vp->setString(cx->runtime->emptyString);
+#endif
     return true;
 }
 
