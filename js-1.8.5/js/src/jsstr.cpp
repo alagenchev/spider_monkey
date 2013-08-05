@@ -2484,16 +2484,39 @@ BuildFlatReplacement(JSContext *cx, JSString *textstr, JSString *repstr,
         if (!leftSide)
             return false;
         JSString *rightSide = js_NewDependentString(cx, textstr, match + fm.patternLength(),
-                                                    textstr->length() - match - fm.patternLength());
+                textstr->length() - match - fm.patternLength());
         if (!rightSide ||
-            !builder.append(leftSide) ||
-            !builder.append(repstr) ||
-            !builder.append(rightSide)) {
+                !builder.append(leftSide) ||
+                !builder.append(repstr) ||
+                !builder.append(rightSide)) {
             return false;
         }
     }
 
+#ifdef TAINT_ON_
+    JSString *returnString = builder.result();
+
+    JSObject *descriptionObject = NULL;
+    if(tainted)
+    {
+        //no idea why Stefano is putting description for this string operation
+        //and not the others. Just one of the several inconcistencies that I've noticed
+        JSObject *valueObject = NULL;
+        jsval val = STRING_TO_JSVAL(repstr);
+        JS_ValueToObject(cx, val, &valueObject); 
+        descriptionObject = JS_NewObject(cx,NULL,NULL,valueObject->getParent());
+
+        JS_SetProperty(cx, descriptionObject, "replace", &val);
+        
+        val = STRING_TO_JSVAL(fm.pattern());
+        JS_SetProperty(cx, descriptionObject, "pattern", &val);
+    }
+
+    TAINT_CONDITIONAL_SET_NEW(returnString, original, descriptionObject, REPLACE);
+    vp->setString(returnString);
+#else
     vp->setString(builder.result());
+#endif
     return true;
 }
 
@@ -2676,6 +2699,21 @@ js::str_replace(JSContext *cx, uintN argc, Value *vp)
         return false;
     static const uint32 optarg = 2;
 
+#ifdef TAINT_ON_
+    TaintInfoEntry *taintInfoEntry;
+    TaintDependencyEntry *taintDependencyEntry;
+
+    taintInfoEntry = NULL;
+    taintDependencyEntry = NULL;
+
+    //declaration of original is outside the macro
+    //to enhance readability. otherwise it's not
+    //very clear where the argument to TAINT_CONDITION
+    //came from
+    JSString *original = NULL;
+    TAINT_CONDITION(rdata.str);
+#endif
+
     /* Extract replacement string/function. */
     if (argc >= optarg && js_IsCallable(vp[3])) {
         rdata.lambda = &vp[3].toObject();
@@ -2749,7 +2787,153 @@ js::str_replace(JSContext *cx, uintN argc, Value *vp)
         if (cx->isExceptionPending())  /* oom in RopeMatch in tryFlatMatch */
             return false;
         JS_ASSERT_IF(!rdata.g.hasRegExpPair(), argc > optarg);
+#ifdef TAINT_ON_
+        bool result;
+        result = str_replace_regexp(cx, argc, vp, rdata);
+
+        if(result) 
+        {
+            JSString *returnString = vp->toString();
+            bool isReplacementTainted = false;
+            if(rdata.repstr && rdata.repstr->isTainted())
+            {
+                isReplacementTainted = true;
+            }
+
+            if(rdata.calledBack)
+            { 
+                //convert vp to regex pair
+                const RegExpPair *regexPair = rdata.g.normalizeRegExp(true, 2, argc, vp);
+
+                if(tainted || isReplacementTainted)//tainted declared in macro
+                {
+                    jsval val;
+                    
+                    if(rdata.lambda) 
+                    {
+                        val= OBJECT_TO_JSVAL( rdata.lambda );
+                    } 
+                    else if(rdata.repstr)
+                    {
+                        val= STRING_TO_JSVAL( rdata.repstr );
+                    } 
+                    else 
+                    {
+                        val= OBJECT_TO_JSVAL( rdata.elembase );
+                    }
+
+                    JSObject *valueObject=NULL;
+                    JS_ValueToObject( cx, val  , &valueObject);
+
+                    JSObject *descriptionObject = 
+                        JS_NewObject(cx,NULL,NULL,valueObject->getParent() );
+                    JS_SetProperty(cx,descriptionObject ,"replace",&val);
+
+                    //convert regex object to jsval
+                    val= OBJECT_TO_JSVAL( regexPair->reobj() );
+                    JS_SetProperty(cx,descriptionObject ,"pattern",&val);
+
+                    //construct the dependency object
+                    if(tainted)  //rdata.str is tainted
+                    { 
+                        taintInfoEntry = findTaintEntry(cx, original);
+                        taintDependencyEntry = buildTaintDependencyEntry(cx, taintInfoEntry);
+                        taintDependencyEntry->description=descriptionObject;
+                    }
+
+                    if(isReplacementTainted)
+                    {
+                        TaintDependencyEntry *temp = taintDependencyEntry;
+                        //if replacement string is tainted too
+                        taintInfoEntry = findTaintEntry(cx, rdata.repstr  );
+                        taintDependencyEntry = buildTaintDependencyEntry(cx, taintInfoEntry);
+                        if(tainted)
+                        {
+                            taintDependencyEntry->nextDependencyEntry = temp;
+                        }
+                        taintDependencyEntry->description=descriptionObject;
+                    }
+
+                    //ivan, what if both original and replacement string are tainted? 
+
+
+                    //attach dependency object to result string
+                    if(returnString == cx->runtime->emptyString)
+                    {
+                        if(tainted || isReplacementTainted){
+                            returnString = taint_newTaintedString(cx, returnString);
+                            returnString->setTainted();
+                            TaintInfoEntry *newEntry =
+                                addToTaintTable(cx, returnString,NULL,REPLACE);
+                            newEntry->myTaintDependencies = taintDependencyEntry; 
+                        }
+                    }
+                    else
+                    { 
+                        if(tainted || isReplacementTainted)
+                        {
+                            if(returnString->length() < 10)
+                            {
+                                returnString = taint_newTaintedString(cx, returnString);
+                            }
+                            returnString->setTainted();
+                            TaintInfoEntry *newEntry =
+                                addToTaintTable(cx, returnString,NULL,REPLACE);
+                            newEntry->myTaintDependencies = taintDependencyEntry; 
+                        }
+                    }
+
+                }
+
+            vp->setString(returnString);
+            }
+            else//callback was never called, since we didn't have a match and the string is 
+            {   //unmodified
+                if(rdata.str->isTainted())
+                {
+                    const RegExpPair *regexPair = rdata.g.normalizeRegExp(true, 2, argc, vp);
+                    returnString = taint_newTaintedString(cx, rdata.str);
+                    jsval val;
+                    JSObject *aObj = NULL;
+
+                    //get the object that was involved in the operation
+                    //either a lambda, a replacement string or elem base
+                    //and we will get the object's parent, so that we can 
+                    //use it to instantiate the descrption object
+                    if(rdata.lambda)
+                    {
+                        val = OBJECT_TO_JSVAL(rdata.lambda);
+                    }
+                    else if(rdata.repstr)
+                    {
+                        val = STRING_TO_JSVAL(rdata.repstr);
+                    }
+                    else
+                    {
+                        val = OBJECT_TO_JSVAL(rdata.elembase);
+                    }
+                    JS_ValueToObject(cx, val, &aObj);
+
+                    JSObject *descriptionObject = JS_NewObject(cx, NULL, NULL, aObj->getParent());
+                    JS_SetProperty(cx, descriptionObject, "replace", &val);
+
+                    val = OBJECT_TO_JSVAL(regexPair->reobj());
+                    JS_SetProperty(cx, descriptionObject, "pattern", &val);
+
+                    addTaintInfo(cx, rdata.str, returnString, descriptionObject, REPLACE);
+                    vp->setString(returnString);
+                }
+                else
+                {
+                    vp->setString(rdata.str);
+                }
+            }
+
+        }
+        return result;
+#else
         return str_replace_regexp(cx, argc, vp, rdata);
+#endif
     }
 
     if (fm->match() < 0) {
@@ -2758,7 +2942,47 @@ js::str_replace(JSContext *cx, uintN argc, Value *vp)
     }
 
     if (rdata.lambda)
-        return str_replace_flat_lambda(cx, argc, vp, rdata, *fm);
+#ifdef TAINT_ON_
+    {
+        bool result;
+        result = str_replace_flat_lambda(cx, argc, vp, rdata, *fm);
+        if(result) 
+        {
+            JSString *returnString = vp->toString();
+            if(tainted || rdata.tainted)
+            {
+                jsval val;
+                JSObject *valueObject = NULL;
+                if(rdata.lambda)
+                {
+                    val = OBJECT_TO_JSVAL(rdata.lambda);
+                }
+                else if(rdata.repstr)
+                {
+                    val = STRING_TO_JSVAL(rdata.repstr);
+                }
+                else
+                {
+                    val = OBJECT_TO_JSVAL(rdata.elembase);
+                }
+                JS_ValueToObject(cx, val, &valueObject);
+                JSObject *descriptionObject = JS_NewObject(cx, NULL, NULL, valueObject->getParent());
+
+                JS_SetProperty(cx, descriptionObject, "replace", &val);
+
+                val = STRING_TO_JSVAL(fm->pattern());
+                JS_SetProperty(cx, descriptionObject, "pattern", &val);
+
+
+                TAINT_CONDITIONAL_SET_NEW(returnString, original, descriptionObject, REPLACE);
+            }
+            vp->setString(returnString);
+        }
+        return result;
+    }
+#else
+    return str_replace_flat_lambda(cx, argc, vp, rdata, *fm);
+#endif
 
     /* 
      * Note: we could optimize the text.length == pattern.length case if we wanted,
@@ -2882,7 +3106,7 @@ str_split(JSContext *cx, uintN argc, Value *vp)
 #ifdef TAINT_ON_
     //declaration of original is outside the macro
     //to enhance readability. otherwise it's not
-    //very clear where the argument to TAINT_CONDITIONAL_SET
+    //very clear where the argument to TAINT_CONDITION
     //came from
     JSString *original = NULL;
     TAINT_CONDITION(str);
@@ -2952,7 +3176,7 @@ str_split(JSContext *cx, uintN argc, Value *vp)
         JSString *sub = js_NewDependentString(cx, str, i, size_t(j - i));
 
 #ifdef TAINT_ON_
-    TAINT_CONDITIONAL_SET_NEW(sub, original, NULL, SPLIT);
+        TAINT_CONDITIONAL_SET_NEW(sub, original, NULL, SPLIT);
 #endif
 
 
@@ -2973,7 +3197,7 @@ str_split(JSContext *cx, uintN argc, Value *vp)
                 res->getParen(num + 1, &parsub);
                 sub = js_NewStringCopyN(cx, parsub.chars, parsub.length);
 #ifdef TAINT_ON_
-    TAINT_CONDITIONAL_SET(sub, original, NULL, SPLIT);
+                TAINT_CONDITIONAL_SET(sub, original, NULL, SPLIT);
 #endif
                 if (!sub || !splits.append(StringValue(sub)))
                     return false;
@@ -3673,14 +3897,14 @@ String_fromCharCode(JSContext* cx, int32 i)
 #endif
 
 JS_DEFINE_TRCINFO_1(str_fromCharCode,
-    (2, (static, STRING_RETRY, String_fromCharCode, CONTEXT, INT32, 1, nanojit::ACCSET_NONE)))
+        (2, (static, STRING_RETRY, String_fromCharCode, CONTEXT, INT32, 1, nanojit::ACCSET_NONE)))
 
 #ifdef TAINT_ON_
 
 
-//registering the newTainted javascript method on strings
-//more info available here:
-//https://developer.mozilla.org/en-US/docs/SpiderMonkey/JSAPI_User_Guide#Native_functions
+    //registering the newTainted javascript method on strings
+    //more info available here:
+    //https://developer.mozilla.org/en-US/docs/SpiderMonkey/JSAPI_User_Guide#Native_functions
 
 inline JSBool str_newTainted(JSContext *cx, uintN argc, jsval *vp)
 {
