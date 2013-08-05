@@ -127,18 +127,19 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
     newTaintEntry->refCount = 0; 
     return newTaintEntry;
 }
-TaintDependencyEntry *addTaintDependencyEntry(JSContext *cx, TaintInfoEntry *originalEntry, 
-        TaintInfoEntry *newTaintEntry)
+
+
+TaintDependencyEntry *buildTaintDependencyEntry(JSContext *cx, TaintInfoEntry *originalEntry)
 {
-    TaintDependencyEntry *newDependency;
-    newDependency = (TaintDependencyEntry *) JS_malloc(cx, (size_t) sizeof(TaintDependencyEntry));
-    newDependency->nextDependencyEntry = NULL;
+    TaintDependencyEntry *newDependency = (TaintDependencyEntry *) JS_malloc(cx,
+            (size_t) sizeof(TaintDependencyEntry));
 
     if(!newDependency)
     {
         return NULL;
     }
 
+    newDependency->nextDependencyEntry = NULL;
     if(originalEntry)
     {
         newDependency->tainter = originalEntry;
@@ -155,6 +156,28 @@ TaintDependencyEntry *addTaintDependencyEntry(JSContext *cx, TaintInfoEntry *ori
 
     return newDependency;
 }
+
+TaintDependencyEntry *createDependencyRelationship(JSContext *cx, TaintInfoEntry *originalEntry, TaintInfoEntry *dependentTaintInfoEntry)
+{
+    TaintDependencyEntry *newDependency = 
+        buildTaintDependencyEntry(cx, originalEntry);
+    if(!newDependency)
+    {
+        return NULL;
+    }
+    if(dependentTaintInfoEntry -> myTaintDependencies)
+    {
+        newDependency -> nextDependencyEntry = 
+            dependentTaintInfoEntry -> myTaintDependencies;
+    }
+    else
+    {
+        newDependency->nextDependencyEntry = NULL;
+    }
+
+    return newDependency;
+}
+
 //this method adds to both the dependency table and the taint table
 TaintDependencyEntry *addDependentEntry(JSContext *cx, JSString *tainter, JSString *taintee, 
         JSString *source, TaintOp op)
@@ -174,7 +197,7 @@ TaintDependencyEntry *addDependentEntry(JSContext *cx, JSString *tainter, JSStri
         return NULL;
     }
 
-    TaintDependencyEntry *newDependency = addTaintDependencyEntry(cx, originalEntry, newTaintEntry);
+    TaintDependencyEntry *newDependency = createDependencyRelationship(cx, originalEntry, newTaintEntry);
 
     if(!newDependency)
     {

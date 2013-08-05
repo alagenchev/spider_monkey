@@ -71,6 +71,11 @@ typedef struct TaintDependencyEntry
 JS_FN("newTainted", str_newTainted, 2, 0),
 #endif //endif for TAINTED_ON
 
+extern TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
+        TaintOp taintOp);
+extern TaintDependencyEntry *buildTaintDependencyEntry(JSContext *cx, TaintInfoEntry *originalEntry);
+
+extern TaintInfoEntry *findTaintEntry(JSContext *cx,JSString *stringToFind);
 extern JSBool taint_getTaintInfo(JSContext *cx, uintN argc, jsval *vp);
 extern JSBool taint_newTainted(JSContext *cx, uintN argc, jsval *vp);
 extern JSBool InitTaintEntries(JSRuntime *rt);
@@ -78,4 +83,5 @@ extern JSBool taint_getTainted(JSContext *cx, JSString *str, jsval *vp);
 extern JSString* taint_newTaintedString(JSContext *cx, JSString *str);
 extern JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, TaintOp op, int start, int end);
 extern JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, JSObject *desc, TaintOp op);
+extern TaintDependencyEntry *createDependencyRelationship(JSContext *cx, TaintInfoEntry *originalEntry, TaintInfoEntry *dependentTaintInfoEntry);
 #endif

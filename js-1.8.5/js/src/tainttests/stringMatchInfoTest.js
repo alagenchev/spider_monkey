@@ -13,8 +13,7 @@ var nsts=new String(parm);
 var res=nsts.match(/([^|]+)/g);
 var i = 0;
 
-
-
+/*
 for(var i=0,l=res.length;i<l;i++)
 {
     var infoResult = String.getTaintInfo(res[i]);
@@ -54,4 +53,4 @@ for(var i=0,l=res.length;i<l;i++)
    // print(expected);
     assert("empty: res[" + i + "]", result == expected, true);
 }
-
+*/
