@@ -797,19 +797,19 @@ str_resolve(JSContext *cx, JSObject *obj, jsid id, uintN flags,
             return JS_FALSE;
 
 #ifdef TAINT_ON_
-    //declaration of original is outside the macro
-    //to enhance readability. otherwise it's not
-    //very clear where the argument to TAINT_CONDITIONAL_SET
-    //came from
-    JSString *original = NULL;
-    TAINT_CONDITION(str);
+        //declaration of original is outside the macro
+        //to enhance readability. otherwise it's not
+        //very clear where the argument to TAINT_CONDITIONAL_SET
+        //came from
+        JSString *original = NULL;
+        TAINT_CONDITION(str);
 
-    TAINT_CONDITIONAL_SET_NEW(str1, original, NULL, NONEOP);
+        TAINT_CONDITIONAL_SET_NEW(str1, original, NULL, NONEOP);
 #endif
 
 
         if (!obj->defineProperty(cx, id, StringValue(str1), NULL, NULL,
-                                 STRING_ELEMENT_ATTRS)) {
+                    STRING_ELEMENT_ATTRS)) {
             return JS_FALSE;
         }
         *objp = obj;
@@ -2420,10 +2420,15 @@ ReplaceRegExpCallback(JSContext *cx, RegExpStatics *res, size_t count, void *p)
     return true;
 }
 
-static bool
+    static bool
 BuildFlatReplacement(JSContext *cx, JSString *textstr, JSString *repstr,
-                     const FlatMatch &fm, Value *vp)
+        const FlatMatch &fm, Value *vp)
 {
+#ifdef TAINT_ON_
+    JSString *original = NULL;
+    TAINT_CONDITION(textstr);
+#endif
+
     RopeBuilder builder(cx);
     size_t match = fm.match();
     size_t matchEnd = match + fm.patternLength();
