@@ -2171,11 +2171,12 @@ struct ReplaceData
     InvokeSessionGuard session;        /* arguments for repeated lambda Invoke call */
     InvokeArgsGuard    singleShot;     /* arguments for single lambda Invoke call */
     StringBuffer       sb;             /* buffer built during DoMatch */
+    JSBool tainted;
 };
 
-static bool
+    static bool
 InterpretDollar(JSContext *cx, RegExpStatics *res, const jschar *dp, const jschar *ep,
-                ReplaceData &rdata, JSSubString *out, size_t *skip)
+        ReplaceData &rdata, JSSubString *out, size_t *skip)
 {
     JS_ASSERT(*dp == '$');
 
