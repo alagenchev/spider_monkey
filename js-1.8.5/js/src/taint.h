@@ -42,23 +42,54 @@ typedef enum taintop {NONEOP,GET,SET,SOURCE,SINK,CHARAT,SUBSTRING,LOWERCASE,UPPE
 
 
 
+/*
+ * TaintInfoEntry contains
+ * taint information about a JSString
+ * that has been tainted.
+ */
 typedef struct TaintInfoEntry
 {
+    // The tainted string.
     JSString *taintedString;
+
+    // refCount is used for cleanup purposes.
     jsuint refCount;
+
+    // The operation that tainted the string.
     TaintOp  op;
+    
+    // Used by the taint operation to track where the
+    // tainted string came from.
     JSString *origin;
+
+    // A list of all taint dependency entries that
+    // were involved in tainting this string
     struct TaintDependencyEntry *myTaintDependencies;
+
+    // Pointer to next entry in the global taint list
     struct TaintInfoEntry *nextEntry;
 } TaintInfoEntry;
 
 
+/*
+ * TaintDependencyEntry contains the chain of
+ * entries that tainted a particular string.
+ */
 typedef struct TaintDependencyEntry
 {
+    // The taint entry of the string
+    // that tainted this entry.
     TaintInfoEntry *tainter;
+
+    // startPosition and endPostion
+    // are used primarily for tracking
+    // concat operations.
     int startPosition;
     int endPosition;
     JSObject *description;
+
+    // Pointer to the next dependency entry in the
+    // list of dependencies for this entry.
     struct TaintDependencyEntry *nextDependencyEntry;
 } TaintDependencyEntry;
 

@@ -13,6 +13,9 @@
 
 JSBool traverseInfoTaintEntry(JSContext *cx, TaintInfoEntry *taintEntry, JSObject *result);
 
+// An array of string operation strings. Each TaintEntry contains an index into this
+// array that is used to lookup the operation that resulted in tainting the string
+// referenced by the taint entry.
 const char *const OpNames[] = {
     "NONE","GET","SET","SOURCE","SINK","CHARAT","SUBSTRING","LOWERCASE","UPPERCASE",
     "JOIN","SPLIT","SLICE","REPLACE","REGEXP","CONCAT","CONCATLEFT","CONCATRIGHT",
@@ -65,6 +68,12 @@ TaintInfoEntry *findTaintEntry(JSContext *cx,JSString *stringToFind)
     return NULL;
 }
 
+// Adds a new string to the tainted strings table
+// Inputs:
+//      str: the tainted string
+//      source: I believe this is passed on by the add-on
+//              and indicates where the string came from in the dom.
+//      taintOp: the taint operation that resulted in tainting this string.        
 TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
         TaintOp taintOp)
 {
@@ -129,6 +138,10 @@ TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
 }
 
 
+/*
+ * Allocate a new taint dependency entry that points to the original tainted entry
+ * and assign default values.
+ */
 TaintDependencyEntry *buildTaintDependencyEntry(JSContext *cx, TaintInfoEntry *originalEntry)
 {
     TaintDependencyEntry *newDependency = (TaintDependencyEntry *) JS_malloc(cx,
@@ -157,6 +170,9 @@ TaintDependencyEntry *buildTaintDependencyEntry(JSContext *cx, TaintInfoEntry *o
     return newDependency;
 }
 
+/*
+ * Used ot create a taint dependency relationship between a tainter and a taintee
+ */
 TaintDependencyEntry *createDependencyRelationship(JSContext *cx, TaintInfoEntry *originalEntry, TaintInfoEntry *dependentTaintInfoEntry)
 {
     TaintDependencyEntry *newDependency = 
@@ -178,7 +194,13 @@ TaintDependencyEntry *createDependencyRelationship(JSContext *cx, TaintInfoEntry
     return newDependency;
 }
 
-//this method adds to both the dependency table and the taint table
+/* 
+ * Adds a new taint entry to the global taint table, creates a dependency
+ * relationship between the original tainter and the newly created taint entry
+ * and appends the newly created dependency relationship to the list of dependenceis
+ * of the newly created taint entry
+ * This method modifies both the dependency table and the taint table
+ */
 TaintDependencyEntry *addDependentEntry(JSContext *cx, JSString *tainter, JSString *taintee, 
         JSString *source, TaintOp op)
 {
@@ -216,6 +238,18 @@ TaintDependencyEntry *addDependentEntry(JSContext *cx, JSString *tainter, JSStri
 
 }
 
+/*
+ * Creates a new taint entry and associated dependency for a new tainted string.
+ * This is primarily used for string operations where the resulting string is comprised
+ * by concatenating with a tainted string.
+ * Input: 
+ *      tainter: The string that tainted this string.
+ *      taintee: The string that gets tainted as a result of this operation.
+ *      op:      The operation that resulted in the taint.
+ *      start:   The beginning index of the newly tainted string that originated from
+ *               the tainter.
+ *      end:     The end of the portion of the taintee that originated in the tainter.
+ */
 JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, TaintOp op, int start, int end)
 {
     //source of taint is set as NULL here. I wonder if we can be a 
@@ -253,18 +287,30 @@ JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee,
     return JS_TRUE;
 }
 
-JSBool traverseTaintees(JSContext *cx, TaintDependencyEntry *taintee, JSString *taintedString, 
-        JSObject *result, JSObject *arrayOfDependencies)
+/*
+ * Takes as input a TaintInfoEntry which we will traverse and extracts an 
+ * array of all tainters related to the tainted entry
+ *
+ * Input:
+ *      taintedEntryToTraverse: the head of the TaintInfoEntry chain that
+ *      will be traversed to extract the array of tainters
+ *
+ *      extractedTainters: this object will contain the array of tainters
+ *                         after the function finishes execution.
+ */
+JSBool extractTainters(JSContext *cx,
+        TaintInfoEntry* taintedEntryToTraverse, JSObject *extractedTainters)
 {
+    TaintDependencyEntry *currentTaintDependency = taintedEntryToTraverse->myTaintDependencies; 
+    JSString *taintedString = taintedEntryToTraverse->taintedString;
     jsval jsValue;
 
     int index = 0;
 
-    while(taintee != NULL && taintee->tainter != NULL)
+    while(currentTaintDependency != NULL && currentTaintDependency->tainter != NULL)
     {
-
         JSObject *description = JS_NewObject(cx, NULL, NULL, NULL);
-        jsValue = INT_TO_JSVAL(taintee->startPosition);
+        jsValue = INT_TO_JSVAL(currentTaintDependency->startPosition);
 
         JSBool setResult = JS_SetProperty(cx, description, "StartPosition", &jsValue);
 
@@ -273,7 +319,7 @@ JSBool traverseTaintees(JSContext *cx, TaintDependencyEntry *taintee, JSString *
             return JS_FALSE;
         }
 
-        jsValue = INT_TO_JSVAL(taintee->endPosition);
+        jsValue = INT_TO_JSVAL(currentTaintDependency->endPosition);
 
         setResult = JS_SetProperty(cx, description, "EndPosition", &jsValue);
 
@@ -282,9 +328,9 @@ JSBool traverseTaintees(JSContext *cx, TaintDependencyEntry *taintee, JSString *
             return JS_FALSE;
         }
 
-        if(taintee->description != NULL)
+        if(currentTaintDependency->description != NULL)
         {
-            jsValue = OBJECT_TO_JSVAL(taintee->description);
+            jsValue = OBJECT_TO_JSVAL(currentTaintDependency->description);
 
             setResult = JS_SetProperty(cx, description, "Description", &jsValue);
 
@@ -295,7 +341,7 @@ JSBool traverseTaintees(JSContext *cx, TaintDependencyEntry *taintee, JSString *
         }
 
         //traverse the tainter and add its properties to description object
-        setResult = traverseInfoTaintEntry(cx, taintee->tainter, description);
+        setResult = traverseInfoTaintEntry(cx, currentTaintDependency->tainter, description);
 
         if(!setResult)
         {
@@ -304,7 +350,7 @@ JSBool traverseTaintees(JSContext *cx, TaintDependencyEntry *taintee, JSString *
 
         jsValue = OBJECT_TO_JSVAL(description);
 
-        setResult = JS_SetElement(cx, arrayOfDependencies, index, &jsValue);
+        setResult = JS_SetElement(cx, extractedTainters, index, &jsValue);
 
         if(!setResult)
         {
@@ -312,7 +358,7 @@ JSBool traverseTaintees(JSContext *cx, TaintDependencyEntry *taintee, JSString *
         }
 
         index ++;
-        taintee = taintee->nextDependencyEntry;
+        currentTaintDependency = currentTaintDependency->nextDependencyEntry;
     }
 
     return JS_TRUE;
@@ -355,22 +401,21 @@ JSBool traverseInfoTaintEntry(JSContext *cx, TaintInfoEntry *taintEntry, JSObjec
 
     if(taintEntry->myTaintDependencies && taintEntry->op <=OpSize)
     {
-        JSObject *taintees = JS_NewArrayObject(cx, 0, NULL);
+        JSObject *tainters = JS_NewArrayObject(cx, 0, NULL);
 
 
         //corresponds to traverseInfoTaintDep
-        bool traversedTaintees = traverseTaintees(cx, taintEntry->myTaintDependencies, 
-                taintEntry->taintedString, result, taintees);
+        bool traversedSuccessfully = extractTainters(cx, taintEntry, tainters);
 
-        if(!traversedTaintees)
+        if(!traversedSuccessfully)
         {
             return JS_FALSE;
         }
 
 
-        jsval tainteesVal = OBJECT_TO_JSVAL(taintees);
+        jsval taintersVal = OBJECT_TO_JSVAL(tainters);
 
-        setProperty = JS_SetProperty(cx, result, "tainters", &tainteesVal);
+        setProperty = JS_SetProperty(cx, result, "tainters", &taintersVal);
         if(!setProperty)
         {
             return JS_FALSE;
@@ -628,10 +673,6 @@ JSBool InitTaintEntries(JSRuntime *runtime)
     return JS_TRUE;
 
 }
-
-
-
-
 
 JSString* taint_newTaintedString(JSContext *cx, JSString* originalString)
 {
