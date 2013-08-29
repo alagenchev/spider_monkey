@@ -302,7 +302,6 @@ JSBool extractTainters(JSContext *cx,
         TaintInfoEntry* taintedEntryToTraverse, JSObject *extractedTainters)
 {
     TaintDependencyEntry *currentTaintDependency = taintedEntryToTraverse->myTaintDependencies; 
-    JSString *taintedString = taintedEntryToTraverse->taintedString;
     jsval jsValue;
 
     int index = 0;
@@ -752,5 +751,44 @@ JSBool taint_getTainted(JSContext *cx, JSString *str, jsval *val)
     return JS_TRUE;
 }
 
+// Takes a tainted string and returns an untainted string
+JSBool taint_untaint(JSContext *cx, uintN argc, jsval *vp)
+{
+    jsval *argv = vp + 2;
+    JSObject result;
+    JSBool returnVal;
+
+    if(JSVAL_IS_STRING(argv[0]))
+    {
+        JSString *passedString = JSVAL_TO_STRING(argv[0]);
+
+        if(passedString->isTainted())
+        {
+            const jschar *stringChars = passedString->getChars(cx);
+            size_t stringLength = passedString->length();
+
+            JSString *untaintedString = js_NewStringCopyN(cx, stringChars, stringLength);
+
+            if(!untaintedString)
+            {
+                return JS_FALSE;
+            }
+
+            *vp = STRING_TO_JSVAL(untaintedString);
+            return JS_TRUE;
+        }
+        else//the passed in string wasn't tainted to begin with
+        {
+            *vp = argv[0];
+            return JS_TRUE;
+        }
+    }
+    
+    // We didn't pass a string to untaint
+    // Shouldn't we throw an exception or return some 
+    // sort of error here?
+    *vp = argv[0];
+    return JS_TRUE;
+}
 
 #endif

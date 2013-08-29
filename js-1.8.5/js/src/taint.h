@@ -98,8 +98,9 @@ typedef struct TaintDependencyEntry
 //macros to hook up javascript to cpp
 //it's used in jsstr.cpp
 #define HOOK_JS_TAINT_METHODS()\
-    JS_FN("getTaintInfo", str_getTaintInfo, 1, 0),\
-JS_FN("newTainted", str_newTainted, 2, 0),
+JS_FN("getTaintInfo", str_getTaintInfo, 1, 0),\
+JS_FN("newTainted", str_newTainted, 2, 0),\
+JS_FN("untaint", str_untaint, 1, 0),
 #endif //endif for TAINTED_ON
 
 extern TaintInfoEntry *addToTaintTable(JSContext *cx,JSString *str,JSString *source,
@@ -115,4 +116,5 @@ extern JSString* taint_newTaintedString(JSContext *cx, JSString *str);
 extern JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, TaintOp op, int start, int end);
 extern JSBool addTaintInfo(JSContext *cx, JSString *tainter, JSString *taintee, JSObject *desc, TaintOp op);
 extern TaintDependencyEntry *createDependencyRelationship(JSContext *cx, TaintInfoEntry *originalEntry, TaintInfoEntry *dependentTaintInfoEntry);
+extern JSBool taint_untaint(JSContext *cx, uintN argc, jsval *vp);
 #endif

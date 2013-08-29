@@ -109,6 +109,10 @@
 #include "jsinterpinlines.h"
 #include "jsobjinlines.h"
 
+#ifdef TAINT_ON_
+#include "taint.h"
+#endif
+
 using namespace js;
 using namespace js::gc;
 
@@ -1219,6 +1223,16 @@ array_toSource(JSContext *cx, uintN argc, Value *vp)
 }
 #endif
 
+// obj contains the array of strings to be joined
+// sepstr contains the string that will be used as
+// a separator between the array elements in the new
+// string. 
+// rval is supposed to hold the result from the operation.
+// Unfortunatly it doubles as a variable to hold the 
+// results from the methods that this method calls
+// That was confusing at first since I didn't know
+// what it's used for. Turns out it has no effect on 
+// the computation itself. 
 static JSBool
 array_toString_sub(JSContext *cx, JSObject *obj, JSBool locale,
                    JSString *sepstr, Value *rval)
@@ -1229,9 +1243,27 @@ array_toString_sub(JSContext *cx, JSObject *obj, JSBool locale,
     static const jschar comma = ',';
     const jschar *sep;
     size_t seplen;
+
+#ifdef TAINT_ON_
+    bool isTainted = false;
+    TaintInfoEntry *taintInfoEntry = NULL;
+    TaintDependencyEntry *taintDependencyEntry = NULL;
+#endif
+
     if (sepstr) {
         seplen = sepstr->length();
         sep = sepstr->getChars(cx);
+
+#ifdef TAINT_ON_
+        if(sepstr->isTainted())
+        {
+            //if the separator is tainted, we want to also 
+            //taint the final result
+            isTainted = true;
+            taintInfoEntry = findTaintEntry(cx, sepstr);
+            taintDependencyEntry = buildTaintDependencyEntry(cx, taintInfoEntry);
+        }
+#endif
         if (!sep)
             return false;
     } else {
@@ -1296,6 +1328,25 @@ array_toString_sub(JSContext *cx, JSObject *obj, JSBool locale,
 
             if (!ValueToStringBuffer(cx, *rval, sb))
                 goto out;
+
+#ifdef TAINT_ON_
+//rval would contain each individual element from the array of strings
+//that we are joining. That's result from the call to GetElement above
+            if(rval->isString() && rval->toString()->isTainted())
+            {
+                //we have a tainted string as one of the array elements
+                //Mark that we will have a tainted string on our hands
+                isTainted = true;
+                taintInfoEntry = findTaintEntry(cx, rval->toString());
+                TaintDependencyEntry *temp = taintDependencyEntry;
+                taintDependencyEntry = buildTaintDependencyEntry(cx, taintInfoEntry);
+
+                if(temp != NULL)
+                {
+                    taintDependencyEntry->nextDependencyEntry = temp;
+                }
+            }
+#endif
         }
 
         /* Append the separator. */
@@ -1312,6 +1363,17 @@ array_toString_sub(JSContext *cx, JSObject *obj, JSBool locale,
     ok = true;
 
   out:
+#ifdef TAINT_ON_
+    if(isTainted)
+    {
+        //we have a tainted string, so we need to taint rval
+        JSString *tempString = taint_newTaintedString(cx, rval->toString());
+        *rval = StringValue(tempString);
+
+        taintInfoEntry = addToTaintTable(cx, tempString, NULL, JOIN);
+        taintInfoEntry->myTaintDependencies = taintDependencyEntry;
+    }
+#endif
     if (genBefore == cx->busyArrays.generation())
         cx->busyArrays.remove(hashp);
     else

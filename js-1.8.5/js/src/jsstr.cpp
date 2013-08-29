@@ -3917,6 +3917,10 @@ inline JSBool str_newTainted(JSContext *cx, uintN argc, jsval *vp)
     return taint_newTainted(cx, argc, vp);
 }
 
+inline JSBool str_untaint(JSContext *cx, uintN argc, jsval *vp)
+{
+    return taint_untaint(cx, argc, vp);
+}
 #endif
 
 static JSFunctionSpec string_static_methods[] = {
