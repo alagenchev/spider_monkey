@@ -17,8 +17,8 @@ process just in case:
 3. Create a folder where binaries will be built. mkdir bin-debug
 4. navigate to that folder cd bin-debug
 5. configure spider monkey:
-CXXFLAGS="-g3 -DTAINT_ON_=1" ../configure --enable-debug --disable-optimize on linux
-CC=clang CXX=clang++ CXXFLAGS="-g3 -DTAINT_ON_=1" ../configure --enable-debug --disable-optimize on mac
+'''CXXFLAGS="-g3 -DTAINT_ON_=1" ../configure --enable-debug --disable-optimize''' on linux
+'''CC=clang CXX=clang++ CXXFLAGS="-g3 -DTAINT_ON_=1" ../configure --enable-debug --disable-optimize''' on mac
 6. Now you can build by running make
 
 You can verify that everything went well by running the unit tests. To do so, go to the tainttests folder: 
